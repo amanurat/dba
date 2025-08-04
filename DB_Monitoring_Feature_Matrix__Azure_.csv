@@ -1,0 +1,23 @@
+Database,Monitoring Feature,How (จะต้องทำอย่างไร เตรียมอะไรให้ใช้งานได้),Support By Azure Portal,Addition Azure Configuration,Direct Query Support,Require Permissions
+PostgreSQL,Slow Query,ใช้ pg_stat_statements เพื่อเปิดการเก็บ Query,❌,เปิด extension: pg_stat_statements,✅,ต้องมีสิทธิ์ superuser หรือ rds_superuser
+PostgreSQL,Top Query,ใช้คำสั่ง SELECT จาก pg_stat_statements,❌,เปิด extension: pg_stat_statements,✅,ต้องเปิด extension และมีสิทธิ์ SELECT
+PostgreSQL,Index,ใช้คำสั่ง EXPLAIN / pg_stat_user_indexes,❌,ไม่จำเป็น,✅,สิทธิ์ SELECT บนตารางที่ต้องตรวจสอบ
+PostgreSQL,Disk Space,ดูผ่าน Azure Monitor หรือ query pg_tablespace_size(),✅,ไม่จำเป็น,✅,สิทธิ์ view หรือ pg_monitor
+PostgreSQL,Disk IOPS,ใช้ Azure Metrics,✅,ไม่จำเป็น,❌,ไม่ต้องมีสิทธิ์ DB เพิ่ม
+PostgreSQL,CPU Usage,ดู Azure Portal metrics (PostgreSQL server),✅,ไม่จำเป็น,❌,ไม่ต้องมีสิทธิ์ DB เพิ่ม
+PostgreSQL,Memory Usage,ดู Azure Monitor หรือ Log Analytics,✅,อาจต้องเปิด Diagnostic Settings,❌,สิทธิ์บน Azure เท่านั้น
+PostgreSQL,DB Locks,ใช้คำสั่ง SELECT จาก pg_locks,❌,ไม่จำเป็น,✅,สิทธิ์ read หรือ superuser
+MySQL,Slow Query,เปิด slow_query_log และดูใน Performance Schema,✅,เปิด slow_query_log = ON,✅,สิทธิ์ SUPER หรือ admin บน Azure
+MySQL,Top Query,ใช้ sys schema หรือ performance_schema,✅,เปิด performance_schema,✅,สิทธิ์ SELECT + Performance Schema Enabled
+MySQL,Index,ใช้ EXPLAIN หรือ SHOW INDEX,✅,ไม่จำเป็น,✅,สิทธิ์ SELECT บนตาราง
+MySQL,Disk Space,ดูผ่าน Azure Metrics หรือ SHOW TABLE STATUS,✅,ไม่จำเป็น,✅,สิทธิ์ SELECT
+MySQL,Disk IOPS,ใช้ Azure Monitor,✅,ไม่จำเป็น,❌,ไม่ต้องใช้ DB Permission
+MySQL,CPU Usage,ดูผ่าน Azure Portal,✅,ไม่จำเป็น,❌,สิทธิ์บน Azure เท่านั้น
+MySQL,Memory Usage,ใช้ Azure Insights หรือ query SHOW STATUS,✅,เปิด performance_schema,✅,สิทธิ์ SELECT + performance_schema
+MSSQL,Slow Query,ใช้ Query Store หรือ Extended Events,✅,เปิด Query Store,✅,สิทธิ์ VIEW SERVER STATE
+MSSQL,Top Query,Query Store Dashboard ใน Azure หรือ DMV,✅,เปิด Query Store,✅,VIEW SERVER STATE + VIEW DATABASE STATE
+MSSQL,Index,ใช้ sys.dm_db_index_usage_stats,✅,ไม่จำเป็น,✅,สิทธิ์ VIEW DB STATE
+MSSQL,Disk Space,Azure Metrics + sp_spaceused,✅,ไม่จำเป็น,✅,สิทธิ์ EXECUTE หรือ VIEW SERVER STATE
+MSSQL,Disk IOPS,Azure Monitor,✅,ไม่จำเป็น,❌,Azure Access เท่านั้น
+MSSQL,CPU Usage,Azure Portal metrics,✅,ไม่จำเป็น,❌,Azure Admin เท่านั้น
+MSSQL,Memory Usage,ดูจาก sys.dm_os_sys_memory หรือ Azure Portal,✅,ไม่จำเป็น,✅,VIEW SERVER STATE
