@@ -115,7 +115,7 @@ ORDER BY query_start;
 
 ## 📁 Optional Assets
 
-- SQL script: [`postgresql_lock_monitoring_queries.sql`](./postgresql_lock_monitoring_queries.sql)
+- SQL script: [`postgresql_lock_monitoring_queries.sql`](../postgresql_lock_monitoring_queries.sql)
 - Grafana JSON Panel (ask to generate)
 - Excel/Google Sheet Lock Audit Template (ask to generate)
 

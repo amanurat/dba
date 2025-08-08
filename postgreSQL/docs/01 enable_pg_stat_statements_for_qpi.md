@@ -49,9 +49,9 @@ After saving changes, **manually restart the PostgreSQL server** to apply them.
 SELECT * FROM pg_extension WHERE extname = 'pg_stat_statements';
 
 -- Check query stats are being collected
-SELECT query, total_time, mean_time, calls
+SELECT query, total_exec_time, mean_exec_time, calls
 FROM pg_stat_statements
-ORDER BY total_time DESC
+ORDER BY total_exec_time DESC
 LIMIT 10;
 ```
 

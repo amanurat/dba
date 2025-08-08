@@ -8,9 +8,9 @@
 ## 🔍 1. ตรวจสอบ Slow Queries จาก `pg_stat_statements`
 
 ```sql
-SELECT query, calls, total_time, mean_time, rows
+SELECT query, calls, total_exec_time, mean_exec_time, rows
 FROM pg_stat_statements
-ORDER BY total_time DESC
+ORDER BY total_exec_time DESC
 LIMIT 10;
 ```
 
@@ -21,7 +21,7 @@ LIMIT 10;
 ## 🔍 2. ตรวจสอบ Query ที่รันบ่อยที่สุด
 
 ```sql
-SELECT query, calls, total_time, mean_time
+SELECT query, calls, total_exec_time, mean_exec_time
 FROM pg_stat_statements
 ORDER BY calls DESC
 LIMIT 10;
@@ -34,14 +34,30 @@ LIMIT 10;
 ## 🔍 3. ตรวจสอบ Query ที่ช้าที่สุดต่อครั้ง (Mean Time)
 
 ```sql
-SELECT query, calls, mean_time, total_time
+SELECT query, calls, mean_exec_time, total_exec_time
 FROM pg_stat_statements
 WHERE calls > 10
+ORDER BY mean_exec_time DESC
+LIMIT 10;
+```
+
+> คัดเฉพาะ query ที่รันมากกว่า 10 ครั้ง เพื่อกรอง noise
+
+
+
+## 🔍 4. ตรวจสอบ Query ที่ช้าที่สุดต่อครั้ง (Mean Time) (No Index)
+
+```sql
+SELECT query, calls, mean_time, rows
+FROM pg_stat_statements
+WHERE query NOT ILIKE '%index%'
+  AND mean_time > 50
 ORDER BY mean_time DESC
 LIMIT 10;
 ```
 
 > คัดเฉพาะ query ที่รันมากกว่า 10 ครั้ง เพื่อกรอง noise
+
 
 ---
 
@@ -53,11 +69,65 @@ SELECT relname AS table,
        seq_scan + idx_scan AS total_accesses,
        round(100.0 * seq_scan / (seq_scan + idx_scan + 1), 2) AS seq_scan_ratio
 FROM pg_stat_user_tables
+WHERE seq_scan + idx_scan > 0
 ORDER BY seq_scan_ratio DESC
 LIMIT 10;
 ```
 
 > ตารางที่มี seq scan เยอะ = น่าจะต้องสร้าง index เพิ่ม
+
+## 🔍 ดู Table ที่ไม่มี Index เลย (No Index At All)
+
+```sql
+SELECT tablename
+FROM pg_tables
+WHERE schemaname = 'public'
+AND tablename NOT IN (
+    SELECT tablename
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+);
+```
+
+📌 แสดงเป็น Checklist หรือ Warning Icon ใน Dashboard
+
+
+## ⚠️ Unused Indexes (Optional)
+
+```sql
+SELECT relname AS indexname,
+       idx_scan, idx_tup_read, idx_tup_fetch
+FROM pg_stat_user_indexes
+JOIN pg_index USING (indexrelid)
+WHERE NOT indisunique
+AND idx_scan = 0;
+```
+📌 แสดงเพื่อช่วย DBA ทำ index cleanup
+
+
+## 🔍 ดูตารางที่มีการเขียน (INSERT/UPDATE/DELETE) สูง
+
+```sql
+SELECT relname,
+       n_tup_ins, n_tup_upd, n_tup_del,
+       n_tup_ins + n_tup_upd + n_tup_del AS total_writes
+FROM pg_stat_user_tables
+ORDER BY total_writes DESC
+LIMIT 10;
+
+```
+## 🔍 ตรวจสอบ buffer cache hit ratio
+
+```sql
+SELECT
+    sum(heap_blks_hit) / nullif(sum(heap_blks_hit + heap_blks_read), 0)::float AS hit_ratio
+FROM pg_statio_user_tables;
+
+
+```
+
+
+
 
 ---
 
