@@ -1,7 +1,25 @@
 
 # PostgreSQL VACUUM Guide
 
-This document explains the behavior of PostgreSQL's `VACUUM`, `VACUUM FULL`, and how table size grows over time with updates when autovacuum is disabled.
+> **⚠️ LEGACY DOCUMENT**: This guide has been superseded by the [Comprehensive VACUUM Management Guide](./postgresql_comprehensive_vacuum_guide.md)
+> 
+> **Recommendation**: Use the comprehensive guide for complete enterprise-grade VACUUM management, bloat monitoring, and automated maintenance procedures.
+
+---
+
+## 📋 **Migration Notice**
+
+This document contains basic VACUUM concepts and a simple lab exercise. For production environments, please refer to:
+- **[PostgreSQL Comprehensive VACUUM Management Guide](./postgresql_comprehensive_vacuum_guide.md)** - Complete enterprise solution
+- Advanced bloat detection and remediation procedures
+- Automated maintenance scheduling and performance monitoring
+- Azure-specific integration and alerting frameworks
+
+---
+
+## 🔄 **Legacy Content** (Educational Purpose Only)
+
+This document explains the basic behavior of PostgreSQL's `VACUUM`, `VACUUM FULL`, and how table size grows over time with updates when autovacuum is disabled.
 
 ---
 
