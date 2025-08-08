@@ -1,7 +1,21 @@
 
 # 🔐 PostgreSQL Lock Monitoring Guide for DBA
 
-> A professional reference for Database Administrators to monitor and manage locking behavior in PostgreSQL, especially when running on Azure Cloud or in production systems.
+> **⚠️ LEGACY DOCUMENT**: This guide has been superseded by the [Comprehensive Lock Monitoring Guide](./postgresql_comprehensive_lock_monitoring_guide.md)
+> 
+> **Recommendation**: Use the comprehensive guide for complete enterprise-grade lock monitoring capabilities.
+
+---
+
+## 📋 **Migration Notice**
+
+This document contains basic lock monitoring concepts. For production environments, please refer to:
+- **[PostgreSQL Comprehensive Lock Monitoring Guide](./postgresql_comprehensive_lock_monitoring_guide.md)** - Complete enterprise solution
+- **[Enhanced Lock Monitoring Queries](../postgresql_lock_monitoring_queries.sql)** - Updated SQL scripts
+
+---
+
+## 🔄 **Legacy Content** (Maintained for Reference)
 
 ---
 

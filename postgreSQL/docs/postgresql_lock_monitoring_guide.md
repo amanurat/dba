@@ -1,7 +1,21 @@
 
 # 🔐 PostgreSQL Lock Monitoring Guide
 
-> A complete guide to monitor and troubleshoot database locks in PostgreSQL, especially useful for production and high-concurrency environments.
+> **⚠️ LEGACY DOCUMENT**: This guide has been superseded by the [Comprehensive Lock Monitoring Guide](./postgresql_comprehensive_lock_monitoring_guide.md)
+> 
+> **Recommendation**: Use the comprehensive guide for complete enterprise-grade lock monitoring capabilities with advanced features, alerting, and Azure integration.
+
+---
+
+## 📋 **Migration Notice**
+
+This document contains basic lock monitoring queries. For production environments, please refer to:
+- **[PostgreSQL Comprehensive Lock Monitoring Guide](./postgresql_comprehensive_lock_monitoring_guide.md)** - Complete enterprise solution
+- **[Enhanced Lock Monitoring Queries](../postgresql_lock_monitoring_queries.sql)** - Professional SQL scripts
+
+---
+
+## 🔄 **Legacy Content** (Maintained for Reference)
 
 ---
 
