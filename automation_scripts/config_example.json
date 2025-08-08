@@ -1,0 +1,63 @@
+{
+  "databases": [
+    {
+      "name": "production-postgresql",
+      "type": "postgresql",
+      "host": "prod-pg.postgres.database.azure.com",
+      "connection": {
+        "host": "prod-pg.postgres.database.azure.com",
+        "port": 5432,
+        "database": "myapp",
+        "user": "dbadmin@prod-pg",
+        "password": "your_password",
+        "sslmode": "require"
+      }
+    },
+    {
+      "name": "production-mysql",
+      "type": "mysql",
+      "host": "prod-mysql.mysql.database.azure.com",
+      "connection": {
+        "host": "prod-mysql.mysql.database.azure.com",
+        "port": 3306,
+        "database": "myapp",
+        "user": "dbadmin@prod-mysql",
+        "password": "your_password",
+        "ssl_disabled": false
+      }
+    },
+    {
+      "name": "production-sqlserver",
+      "type": "sqlserver",
+      "server": "prod-sql.database.windows.net",
+      "connection_string": "DRIVER={ODBC Driver 17 for SQL Server};SERVER=prod-sql.database.windows.net;DATABASE=myapp;UID=dbadmin;PWD=your_password;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+    }
+  ],
+  "azure_enabled": true,
+  "azure": {
+    "subscription_id": "your-subscription-id",
+    "resource_group": "your-resource-group",
+    "workspace_id": "your-log-analytics-workspace-id"
+  },
+  "email": {
+    "enabled": true,
+    "smtp_server": "smtp.office365.com",
+    "smtp_port": 587,
+    "use_tls": true,
+    "from": "dba-alerts@company.com",
+    "username": "dba-alerts@company.com",
+    "password": "your_email_password",
+    "to": [
+      "dba-team@company.com",
+      "ops-team@company.com"
+    ]
+  },
+  "thresholds": {
+    "connection_usage_warning": 80,
+    "connection_usage_critical": 95,
+    "cache_hit_ratio_warning": 95,
+    "cache_hit_ratio_critical": 90,
+    "replication_lag_warning": 30,
+    "replication_lag_critical": 60
+  }
+}
