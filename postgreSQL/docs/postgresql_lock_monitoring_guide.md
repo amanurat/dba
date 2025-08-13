@@ -11,7 +11,7 @@
 
 This document contains basic lock monitoring queries. For production environments, please refer to:
 - **[PostgreSQL Comprehensive Lock Monitoring Guide](./postgresql_comprehensive_lock_monitoring_guide.md)** - Complete enterprise solution
-- **[Enhanced Lock Monitoring Queries](../postgresql_lock_monitoring_queries.sql)** - Professional SQL scripts
+- **[Enhanced Lock Monitoring Queries](../scripts/monitoring/postgresql_lock_monitoring_queries.sql)** - Professional SQL scripts
 
 ---
 

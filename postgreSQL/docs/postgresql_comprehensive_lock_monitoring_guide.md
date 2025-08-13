@@ -513,7 +513,7 @@ fi
 
 - **PostgreSQL Documentation**: [Lock Monitoring](https://www.postgresql.org/docs/current/monitoring-locks.html)
 - **Azure PostgreSQL**: [Performance Monitoring](https://docs.microsoft.com/en-us/azure/postgresql/concepts-monitoring)
-- **Related Scripts**: [`postgresql_lock_monitoring_queries.sql`](../postgresql_lock_monitoring_queries.sql)
+- **Related Scripts**: [`postgresql_lock_monitoring_queries.sql`](../scripts/monitoring/postgresql_lock_monitoring_queries.sql)
 
 ---
 
