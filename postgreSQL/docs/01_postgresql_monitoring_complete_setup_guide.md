@@ -791,7 +791,7 @@ Data Collection Check     | ✅ PASS
 
 ### **Related DBA Guides**
 - [PostgreSQL Performance Query Templates](./03_postgresql_performance_query_templates.md)
-- [PostgreSQL Database Connection & Extension Management Guide](./postgresql_database_connection_extension_management_guide.md)
+- [PostgreSQL Database Connection & Extension Management Guide](./06_postgresql_database_connection_extension_management_guide.md)
 - [PostgreSQL Comprehensive Lock Monitoring Guide](./postgresql_comprehensive_lock_monitoring_guide.md)
 
 ---
