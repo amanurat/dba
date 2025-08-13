@@ -16,6 +16,7 @@
 *Azure PostgreSQL Flexible Server overview and best practices*
 
 ### **🔍 Need Specific Solutions?**
+- **Complete Performance Tuning** → [07_postgresql_performance_tuning_step_by_step_guide.md](./07_postgresql_performance_tuning_step_by_step_guide.md) ⭐ **POPULAR**
 - **Performance Issues** → [03_postgresql_performance_query_templates.md](./03_postgresql_performance_query_templates.md)
 - **Slow Queries** → [05_postgresql_explain_analyze_guide.md](./05_postgresql_explain_analyze_guide.md)
 - **Lock Problems** → [postgresql_comprehensive_lock_monitoring_guide.md](./postgresql_comprehensive_lock_monitoring_guide.md)
@@ -23,7 +24,7 @@
 
 ---
 
-## 📖 **Main Learning Path (01-06)**
+## 📖 **Main Learning Path (01-07)**
 
 Follow this sequence for comprehensive PostgreSQL monitoring mastery:
 
@@ -35,12 +36,13 @@ Follow this sequence for comprehensive PostgreSQL monitoring mastery:
 | **[04](./04_postgresql_dashboard_index_recommendations.md)** | 🟡 Intermediate | 15 min | Dashboard creation and index recommendations | Files 01-03 |
 | **[05](./05_postgresql_explain_analyze_guide.md)** | 🟡 Intermediate | 25 min | Query analysis with EXPLAIN ANALYZE | SQL experience |
 | **[06](./06_postgresql_database_connection_extension_management_guide.md)** | 🔴 Advanced | 45-60 min | Multi-database and extension management | DBA experience |
+| **[07](./07_postgresql_performance_tuning_step_by_step_guide.md)** ⭐ | 🟡 Intermediate | 1-2 hours | **Complete performance tuning walkthrough (Easy Guide)** | Files 01-05 |
 
 ### **📊 Learning Progression:**
 ```
-Setup (01) → Overview (02) → Practical Tools (03-05) → Advanced Management (06)
-     ↓              ↓                    ↓                        ↓
-   5 minutes     Summary         Day-to-day tools        Enterprise level
+Setup (01) → Overview (02) → Practical Tools (03-05) → Advanced Management (06) → Complete Tuning (07)
+     ↓              ↓                    ↓                        ↓                       ↓
+   5 minutes     Summary         Day-to-day tools        Enterprise level        Hands-on Optimization
 ```
 
 ---
@@ -123,6 +125,7 @@ postgresql/
 |--------------|---------------------|-------------------|
 | **"I need to set up monitoring quickly"** | [01](./01_postgresql_monitoring_complete_setup_guide.md) → Section 1 only | 5-10 minutes |
 | **"I want to understand Azure PostgreSQL"** | [02](./02_postgresql_monitoring_azure_summary.md) → [01](./01_postgresql_monitoring_complete_setup_guide.md) | 30 minutes |
+| **"I want to tune my database completely"** ⭐ | [07](./07_postgresql_performance_tuning_step_by_step_guide.md) **Easy step-by-step guide** | 1-2 hours |
 | **"My queries are slow"** | [03](./03_postgresql_performance_query_templates.md) → [05](./05_postgresql_explain_analyze_guide.md) → [postgresql_index_analysis_*](./postgresql_index_analysis_cost_estimation_guide.md) | 1-2 hours |
 | **"I have blocking/deadlocks"** | [postgresql_comprehensive_lock_monitoring_guide.md](./postgresql_comprehensive_lock_monitoring_guide.md) | 45 minutes |
 | **"Database is growing too fast"** | [postgresql_comprehensive_vacuum_guide.md](./postgresql_comprehensive_vacuum_guide.md) | 1 hour |
@@ -193,7 +196,7 @@ psql -f scripts/sample-data/sample_data_for_pg_performance_tuning.sql
 | **Tag** | **Files** | **Use Case** |
 |---------|-----------|--------------|
 | `#setup` | 01, 02 | Initial configuration |
-| `#performance` | 03, 05, postgresql_index_analysis_* | Query optimization |
+| `#performance` | 03, 05, 07, postgresql_index_analysis_* | Query optimization |
 | `#monitoring` | 01, 02, 04, postgresql_lock_monitoring_* | Health checks |
 | `#azure` | 01, 02, 06 | Azure-specific guidance |
 | `#troubleshooting` | 05, postgresql_lock_monitoring_*, postgresql_vacuum_* | Problem solving |
