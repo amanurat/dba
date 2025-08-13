@@ -674,7 +674,7 @@ AzureDiagnostics
 
 ### **Related DBA Guides**
 - [PostgreSQL Monitoring & Performance Complete Setup Guide](./01_postgresql_monitoring_complete_setup_guide.md)
-- [PostgreSQL Performance Query Templates](./04%20postgresql_performance_query_templates.md)
+- [PostgreSQL Performance Query Templates](./03_postgresql_performance_query_templates.md)
 - [PostgreSQL Comprehensive Lock Monitoring Guide](./postgresql_comprehensive_lock_monitoring_guide.md)
 - [PostgreSQL Comprehensive VACUUM Guide](./postgresql_comprehensive_vacuum_guide.md)
 

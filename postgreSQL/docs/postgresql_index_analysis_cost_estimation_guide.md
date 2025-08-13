@@ -278,9 +278,9 @@ FROM pg_stat_user_indexes;
 
 ## 🔗 **Related Documentation**
 
-- [PostgreSQL EXPLAIN ANALYZE Guide](./06%20postgresql_explain_analyze_guide.md)
-- [PostgreSQL Performance Query Templates](./04%20postgresql_performance_query_templates.md)
-- [PostgreSQL Dashboard Index Recommendations](./05%20postgresql_dashboard_index_recommendations.md)
+- [PostgreSQL EXPLAIN ANALYZE Guide](./05_postgresql_explain_analyze_guide.md)
+- [PostgreSQL Performance Query Templates](./03_postgresql_performance_query_templates.md)
+- [PostgreSQL Dashboard Index Recommendations](./04_postgresql_dashboard_index_recommendations.md)
 
 ---
 

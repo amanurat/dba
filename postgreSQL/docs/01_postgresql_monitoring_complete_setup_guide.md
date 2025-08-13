@@ -790,7 +790,7 @@ Data Collection Check     | ✅ PASS
 - [Monitoring Database Activity](https://www.postgresql.org/docs/current/monitoring.html)
 
 ### **Related DBA Guides**
-- [PostgreSQL Performance Query Templates](./04%20postgresql_performance_query_templates.md)
+- [PostgreSQL Performance Query Templates](./03_postgresql_performance_query_templates.md)
 - [PostgreSQL Database Connection & Extension Management Guide](./postgresql_database_connection_extension_management_guide.md)
 - [PostgreSQL Comprehensive Lock Monitoring Guide](./postgresql_comprehensive_lock_monitoring_guide.md)
 
