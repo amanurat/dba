@@ -6,10 +6,25 @@ SQL scripts for PostgreSQL performance analysis, tuning, and optimization.
 
 | Script | Purpose | Risk Level |
 |--------|---------|------------|
+| `step_tuning.sql` | ⭐ **Complete step-by-step performance analysis and tuning guide** | 🟢🟡🔴 Progressive |
 | `script analyze index and cost.sql` | Comprehensive index analysis and cost estimation | 🟡 Analysis |
 | `simulate_pg_query_load.sql` | Generate test workload for performance testing | 🟡 Test Load |
 
 ## 🔍 Script Details
+
+### **⭐ step_tuning.sql** (RECOMMENDED - START HERE)
+- **Purpose**: Complete step-by-step PostgreSQL performance analysis and tuning workflow
+- **Use Case**: Systematic database optimization, performance troubleshooting, health assessment
+- **Safety**: Progressive safety levels (🟢 Read-only → 🟡 Safe changes → 🔴 Advanced tuning)
+- **Output**: Comprehensive performance report with specific recommendations and implementation scripts
+- **Time**: 45-60 minutes for complete analysis
+- **Features**:
+  - 11-step systematic analysis workflow
+  - Performance score calculation (0-100)
+  - Actionable recommendations with SQL scripts
+  - Before/after comparison capabilities
+  - Integration with monitoring setup
+- **Related Docs**: [PostgreSQL Monitoring Complete Setup Guide](../../docs/01_postgresql_monitoring_complete_setup_guide.md)
 
 ### **script analyze index and cost.sql**
 - **Purpose**: Analyze table indexes, identify missing indexes, and estimate query costs
@@ -28,7 +43,11 @@ SQL scripts for PostgreSQL performance analysis, tuning, and optimization.
 ## 🚀 Usage Examples
 
 ```bash
-# Run index analysis (recommend running during low-traffic periods)
+# ⭐ RECOMMENDED: Complete performance analysis and tuning
+psql "host=myserver.postgres.database.azure.com user=myuser dbname=mydb sslmode=require" \
+  -f step_tuning.sql
+
+# Run specific index analysis (during low-traffic periods)
 psql "host=myserver.postgres.database.azure.com user=myuser dbname=mydb sslmode=require" \
   -f "script analyze index and cost.sql"
 
