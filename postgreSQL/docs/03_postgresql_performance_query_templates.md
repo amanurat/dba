@@ -48,11 +48,11 @@ LIMIT 10;
 ## 🔍 4. ตรวจสอบ Query ที่ช้าที่สุดต่อครั้ง (Mean Time) (No Index)
 
 ```sql
-SELECT query, calls, mean_time, rows
+SELECT query, calls, mean_exec_time, rows
 FROM pg_stat_statements
 WHERE query NOT ILIKE '%index%'
-  AND mean_time > 50
-ORDER BY mean_time DESC
+  AND mean_exec_time > 50
+ORDER BY mean_exec_time DESC
 LIMIT 10;
 ```
 
