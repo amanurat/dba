@@ -6,11 +6,10 @@
 
 ## 📋 **Table of Contents**
 
-- [🚀 Section 1: Quick Start - Enable QPI (5 minutes)](#-section-1-quick-start---enable-qpi-5-minutes)
-- [⚙️ Section 2: Production Setup - Complete Parameters](#️-section-2-production-setup---complete-parameters)
-- [🔧 Section 3: Advanced Features](#-section-3-advanced-features)
-- [🤖 Section 4: Automation & Scripts](#-section-4-automation--scripts)
-- [🚨 Section 5: Troubleshooting & Best Practices](#-section-5-troubleshooting--best-practices)
+- [🚀1: Quick Start - Enable QPI (5 minutes)](#-section-1-quick-start---enable-qpi-5-minutes)
+- [⚙️2: Production Setup - Complete Parameters](#️-section-2-production-setup---complete-parameters)
+- [🔧3: Advanced Features](#-section-3-advanced-features)
+- [🚨4: Troubleshooting & Best Practices](#-section-5-troubleshooting--best-practices)
 
 ---
 
@@ -135,52 +134,6 @@ LIMIT 10;
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 ```
 
-#### **Method 2: Azure CLI (For DevOps)**
-
-```bash
-# Variables (replace with your values)
-RESOURCE_GROUP="your-resource-group"
-SERVER_NAME="your-server-name"
-
-# Step 1: Enable azure.extensions
-az postgres flexible-server parameter set \
-  --resource-group $RESOURCE_GROUP \
-  --server-name $SERVER_NAME \
-  --name azure.extensions \
-  --value "pg_stat_statements,pg_buffercache,pg_prewarm"
-
-# Step 2: Configure shared_preload_libraries
-az postgres flexible-server parameter set \
-  --resource-group $RESOURCE_GROUP \
-  --server-name $SERVER_NAME \
-  --name shared_preload_libraries \
-  --value "pg_stat_statements"
-
-# Step 3: Configure pg_stat_statements parameters
-az postgres flexible-server parameter set \
-  --resource-group $RESOURCE_GROUP \
-  --server-name $SERVER_NAME \
-  --name pg_stat_statements.track \
-  --value "all"
-
-az postgres flexible-server parameter set \
-  --resource-group $RESOURCE_GROUP \
-  --server-name $SERVER_NAME \
-  --name pg_stat_statements.max \
-  --value "10000"
-
-az postgres flexible-server parameter set \
-  --resource-group $RESOURCE_GROUP \
-  --server-name $SERVER_NAME \
-  --name pg_stat_statements.save \
-  --value "on"
-
-# Step 4: Restart server
-az postgres flexible-server restart \
-  --resource-group $RESOURCE_GROUP \
-  --name $SERVER_NAME
-```
-
 ### **🧪 Post-Setup Verification (Production)**
 
 ```sql
@@ -225,13 +178,13 @@ DROP TABLE test_monitoring;
 
 -- Step 5: Verify our test queries are tracked
 SELECT 
-    LEFT(query, 60) as query_preview,
+    LEFT(query, 80) as query_preview,
     calls,
     total_exec_time,
     mean_exec_time,
     rows
 FROM pg_stat_statements 
-WHERE query LIKE '%test_monitoring%'
+WHERE query LIKE '%S%'
 ORDER BY total_exec_time DESC;
 -- Expected: Should see our INSERT, SELECT, DROP queries
 
@@ -287,29 +240,12 @@ FROM pg_stat_statements;
 | pg_qs.query_capture_mode | ALL | Capture every query |
 | pg_qs.query_capture_sample_rate | 1.0 | 100% capture rate |
 
-**Setup:**
-```bash
-az postgres flexible-server parameter set \
-  --name pg_qs.query_capture_mode \
-  --value "ALL"
-
-az postgres flexible-server parameter set \
-  --name pg_qs.query_capture_sample_rate \
-  --value "1.0"
-```
-
 ### **⏱️ Enable Wait Sampling (pgms_wait_sampling)**
 
 | Parameter | Value | Note |
 |-----------|-------|------|
 | pgms_wait_sampling.query_capture_mode | All | Case-sensitive |
 
-**Setup:**
-```bash
-az postgres flexible-server parameter set \
-  --name pgms_wait_sampling.query_capture_mode \
-  --value "All"
-```
 
 ### **📈 Advanced Performance Parameters**
 
@@ -343,19 +279,10 @@ SHOW pgms_wait_sampling.query_capture_mode;
 -- Generate some test load
 SELECT pg_sleep(0.1);
 CREATE TEMP TABLE qs_test AS SELECT * FROM generate_series(1,10000) i;
-SELECT COUNT(*) FROM qs_test;
-DROP TABLE qs_test;
+SELECT * FROM qs_test;
 
--- Check if Query Store captured the queries
-SELECT 
-    query_sql_text,
-    execution_count,
-    total_query_exec_time,
-    mean_query_exec_time
-FROM query_store.qs_view
-WHERE query_sql_text LIKE '%qs_test%'
-ORDER BY total_query_exec_time DESC;
--- Expected: Should see our test queries
+
+-- DROP TABLE qs_test;
 
 -- Step 4: Performance parameters verification
 SHOW work_mem;
@@ -370,205 +297,7 @@ SELECT
     COUNT(*) as tracked_queries,
     ROUND(SUM(total_exec_time)) as total_time_ms
 FROM pg_stat_statements
-
-UNION ALL
-
-SELECT 
-    'query_store',
-    COUNT(*),
-    ROUND(SUM(total_query_exec_time))
-FROM query_store.qs_view;
 -- Expected: Both sources should show query statistics
-```
-
----
-
-## 🤖 **Section 4: Automation & Scripts**
-
-> Tools และ scripts สำหรับการจัดการ monitoring แบบอัตโนมัติ
-
-### **📦 ARM Template (Infrastructure as Code)**
-
-```json
-{
-  "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
-  "apiVersion": "2021-06-01",
-  "name": "[concat(parameters('serverName'), '/azure.extensions')]",
-  "properties": {
-    "value": "pg_stat_statements,pg_buffercache,pg_prewarm",
-    "source": "user-override"
-  }
-},
-{
-  "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations", 
-  "apiVersion": "2021-06-01",
-  "name": "[concat(parameters('serverName'), '/shared_preload_libraries')]",
-  "properties": {
-    "value": "pg_stat_statements",
-    "source": "user-override"
-  }
-},
-{
-  "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
-  "apiVersion": "2021-06-01", 
-  "name": "[concat(parameters('serverName'), '/pg_stat_statements.max')]",
-  "properties": {
-    "value": "10000",
-    "source": "user-override"
-  }
-}
-```
-
-### **🔍 Health Check Script**
-
-```bash
-#!/bin/bash
-# postgresql_monitoring_health_check.sh
-# Comprehensive health check for PostgreSQL monitoring setup
-
-SERVER_NAME="your-server-name"
-RESOURCE_GROUP="your-resource-group"
-DB_HOST="$SERVER_NAME.postgres.database.azure.com"
-DB_USER="your_user"
-DB_NAME="your_database"
-
-echo "=== PostgreSQL Monitoring Health Check ==="
-echo "Server: $SERVER_NAME"
-echo "Date: $(date)"
-echo "User: $DB_USER"
-echo
-
-# Check server status
-echo "1. Server Status:"
-az postgres flexible-server show \
-  --resource-group $RESOURCE_GROUP \
-  --name $SERVER_NAME \
-  --query "state" -o tsv
-
-# Check parameters
-echo "2. Parameter Configuration:"
-psql "host=$DB_HOST user=$DB_USER dbname=$DB_NAME sslmode=require" -c "
-    SELECT 'azure.extensions' as parameter, setting as value FROM pg_settings WHERE name = 'azure.extensions'
-    UNION ALL
-    SELECT 'shared_preload_libraries', setting FROM pg_settings WHERE name = 'shared_preload_libraries'
-    UNION ALL  
-    SELECT 'pg_stat_statements.track', setting FROM pg_settings WHERE name = 'pg_stat_statements.track'
-    UNION ALL
-    SELECT 'pg_stat_statements.max', setting FROM pg_settings WHERE name = 'pg_stat_statements.max';
-"
-
-# Check extensions
-echo "3. Extension Status:"
-psql "host=$DB_HOST user=$DB_USER dbname=$DB_NAME sslmode=require" -c "
-    SELECT 
-        extname as extension_name,
-        extversion as version,
-        CASE WHEN extname IS NOT NULL THEN 'INSTALLED' ELSE 'NOT_INSTALLED' END as status
-    FROM pg_extension 
-    WHERE extname IN ('pg_stat_statements', 'pg_buffercache');
-"
-
-# Check functionality  
-echo "4. Functionality Test:"
-psql "host=$DB_HOST user=$DB_USER dbname=$DB_NAME sslmode=require" -c "
-    SELECT 
-        COUNT(*) as tracked_queries,
-        ROUND(SUM(total_exec_time)) as total_execution_time_ms,
-        ROUND(AVG(mean_exec_time), 2) as avg_execution_time_ms
-    FROM pg_stat_statements;
-"
-
-# Top 5 queries
-echo "5. Top 5 Slow Queries:"
-psql "host=$DB_HOST user=$DB_USER dbname=$DB_NAME sslmode=require" -c "
-    SELECT 
-        LEFT(query, 60) as query_preview,
-        calls,
-        ROUND(total_exec_time, 2) as total_time_ms,
-        ROUND(mean_exec_time, 2) as avg_time_ms
-    FROM pg_stat_statements 
-    WHERE query NOT LIKE '%pg_stat_statements%'
-    ORDER BY total_exec_time DESC 
-    LIMIT 5;
-"
-
-echo "=== End of Health Check ==="
-```
-
-### **💾 Parameter Backup Script**
-
-```bash
-#!/bin/bash
-# backup_postgresql_parameters.sh
-# Backup current server parameters for disaster recovery
-
-RESOURCE_GROUP="your-resource-group"
-SERVER_NAME="your-server-name"
-BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
-
-echo "Backing up PostgreSQL parameters..."
-
-# Backup all user-override parameters
-az postgres flexible-server parameter list \
-  --resource-group $RESOURCE_GROUP \
-  --server-name $SERVER_NAME \
-  --query "[?source=='user-override'].{name:name,value:value}" \
-  -o json > "postgresql_parameters_backup_${BACKUP_DATE}.json"
-
-# Create restore script
-cat > "restore_parameters_${BACKUP_DATE}.sh" << EOF
-#!/bin/bash
-# Auto-generated restore script for PostgreSQL parameters
-# Generated on: $(date)
-# Server: $SERVER_NAME
-# Resource Group: $RESOURCE_GROUP
-
-RESOURCE_GROUP="$RESOURCE_GROUP"
-SERVER_NAME="$SERVER_NAME"
-
-echo "Restoring PostgreSQL parameters..."
-EOF
-
-# Extract parameters and create restore commands
-az postgres flexible-server parameter list \
-  --resource-group $RESOURCE_GROUP \
-  --server-name $SERVER_NAME \
-  --query "[?source=='user-override'].{name:name,value:value}" \
-  -o tsv | while IFS=$'\t' read -r name value; do
-    echo "az postgres flexible-server parameter set --resource-group \$RESOURCE_GROUP --server-name \$SERVER_NAME --name \"$name\" --value \"$value\"" >> "restore_parameters_${BACKUP_DATE}.sh"
-done
-
-chmod +x "restore_parameters_${BACKUP_DATE}.sh"
-
-echo "Parameters backed up to:"
-echo "  - postgresql_parameters_backup_${BACKUP_DATE}.json"
-echo "  - restore_parameters_${BACKUP_DATE}.sh"
-```
-
-### **🧪 Post-Setup Verification (Automation)**
-
-```bash
-# Test the health check script
-./postgresql_monitoring_health_check.sh
-
-# Expected output should show:
-# - Server state: Ready
-# - All parameters correctly configured
-# - Extensions installed and working
-# - Query statistics being collected
-# - Top queries visible
-
-# Test the backup script
-./backup_postgresql_parameters.sh
-
-# Expected output:
-# - Backup JSON file created
-# - Restore script generated
-# - All files have correct permissions
-
-# Verify backup contents
-cat postgresql_parameters_backup_$(date +%Y%m%d)*.json | jq .
-# Expected: JSON array with all your custom parameters
 ```
 
 ---
@@ -788,12 +517,4 @@ Data Collection Check     | ✅ PASS
 - [pg_stat_statements Extension](https://www.postgresql.org/docs/current/pgstatstatements.html)
 - [Server Configuration](https://www.postgresql.org/docs/current/runtime-config.html)
 - [Monitoring Database Activity](https://www.postgresql.org/docs/current/monitoring.html)
-
-### **Related DBA Guides**
-- [PostgreSQL Performance Query Templates](./03_postgresql_performance_query_templates.md)
-- [PostgreSQL Database Connection & Extension Management Guide](./06_postgresql_database_connection_extension_management_guide.md)
-- [PostgreSQL Comprehensive Lock Monitoring Guide](./postgresql_comprehensive_lock_monitoring_guide.md)
-
 ---
-
-*This comprehensive guide covers everything from quick QPI setup to enterprise-grade monitoring infrastructure. Each section includes detailed post-verification steps to ensure successful implementation.*
