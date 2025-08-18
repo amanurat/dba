@@ -302,7 +302,7 @@ FROM pg_stat_statements
 
 ---
 
-## 🚨 **Section 5: Troubleshooting & Best Practices**
+## 🚨 **Section 4: Troubleshooting & Best Practices**
 
 > Common issues และวิธีแก้ปัญหาทั้งหมดที่พบบ่อย
 
