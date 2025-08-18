@@ -1,0 +1,7 @@
+server: pgus.postgres.database.azure.com
+port : 5432
+user: Alex2016
+Password: 1ojkiyd*
+DB: simpledb
+
+google sheet: https://docs.google.com/spreadsheets/d/1IzIFX-SW5aLImHfnh5Q0xdQdQphN6UFdyTMr8eDgHdk/edit?gid=0#gid=0

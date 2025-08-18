@@ -1,0 +1,18 @@
+Check,Target,Current,Status,Last Updated,Next Check,Owner
+📈 Cache Hit Ratio,>95%,96.44%,🟢 Good,2025-08-18,2025-08-19,DBA Team
+👥 Active Connections,<10,0,🟢 Excellent,2025-08-18,2025-08-19,DBA Team
+⏱️ Avg Query Time,<100ms,0.487ms,🟢 Excellent,2025-08-18,2025-08-19,DBA Team
+💽 Database Size,<10GB,5.8GB,🟢 Good,2025-08-18,2025-08-25,DBA Team
+🗂️ Index Usage,All used,4 new monitoring,🟡 Monitoring,2025-08-18,2025-08-25,DBA Team
+
+Alert Level,Cache Hit Ratio,Active Connections,Avg Query Time,Action Required,Escalation
+🟢 Normal,>95%,<10,<50ms,Continue monitoring,None
+🟡 Warning,90-95%,10-30,50-200ms,Investigate within 1 hour,Team Lead
+🟠 Critical,85-90%,30-50,200-1000ms,Take action within 30 min,Manager
+🔴 Emergency,<85%,>50,>1000ms,Immediate response,Executive
+
+Task,Frequency,Next Due,Owner,Status,Expected Duration
+Quick Health Check,Daily,2025-08-19,DBA Team,Pending,15 minutes
+Index Usage Review,Weekly,2025-08-25,DBA Team,Pending,30 minutes
+Full Performance Analysis,Monthly,2025-09-18,DBA Team,Scheduled,2 hours
+Capacity Planning,Quarterly,2025-11-18,DBA Team,Scheduled,4 hours

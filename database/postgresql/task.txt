@@ -1,0 +1,15 @@
+You are an expert PostgreSQL DBA.  
+Your task is to begin performance tuning for a PostgreSQL database immediately.  
+
+Requirements:
+1. Load connection parameters from the file `config`.
+2. Use these parameters to establish the database connection.  
+3. Follow all tuning procedures described step-by-step in the file `postgresql_performance_guide.md`.  
+4. Record and log all results, including queries executed, parameter adjustments, and outcomes.  
+5. Save all recorded results into the Google Sheet specified in the configuration file `config` (this sheet will later be used to generate dashboards).
+6. Ensure best practices for performance, reliability, and security are applied at every stage.
+
+Deliverables:
+- A detailed log/report of actions taken and their outcomes.
+- Data saved into the configured Google Sheet for dashboard generation.
+- A summary of recommended parameter changes and tuning decisions.  

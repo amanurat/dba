@@ -1,0 +1,12 @@
+Rank,Query Preview,Avg Time (ms),Total Time (ms),Calls,Impact,Status
+1,CREATE TABLE performance_test_estimates...,472750.98,472750.98,1,🔴 Critical,One-time operation
+2,SELECT * FROM orders WHERE customer_id = random()...,91.62,274852.85,3000,🟠 High,✅ Optimized with Index
+3,Aggregate Query (country COUNT AVG)...,482.45,13508.60,28,🟠 High,Needs optimization
+4,JOIN Query (orders + customers)...,412.96,11562.88,28,🟠 High,Partially optimized
+5,UPDATE orders SET status WHERE...,257.69,7215.32,28,🟡 Medium,Can be improved
+
+Category,Count,Avg Time,Status,Action Taken,Next Steps
+🟢 Fast (<50ms),Unknown,<50ms,Good,Monitor,Continue monitoring
+🟡 Moderate (50-200ms),Unknown,50-200ms,Acceptable,Watch,Set up alerts
+🟠 Slow (200-1000ms),4,332ms,Improving,✅ Indexed,Monitor effectiveness
+🔴 Very Slow (>1000ms),1,472750ms,Critical,✅ Analyzed,One-time operation

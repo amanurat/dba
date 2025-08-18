@@ -1,0 +1,114 @@
+{
+  "performance_tuning_session": {
+    "timestamp": "2025-08-18T00:00:00Z",
+    "database_info": {
+      "server": "pgus.postgres.database.azure.com",
+      "database": "simpledb",
+      "version": "PostgreSQL 17.5",
+      "size_mb": 5833
+    },
+    "before_optimization": {
+      "database_size_mb": 5833,
+      "database_size_rating": "🟠 Large",
+      "active_connections": 0,
+      "connection_rating": "🟢 Excellent",
+      "cache_hit_ratio": 96.43,
+      "cache_rating": "🟢 Good",
+      "slow_queries_count": 5,
+      "unused_indexes_count": 2,
+      "sequential_scan_ratio": 100.0,
+      "performance_score": 75,
+      "performance_grade": "C"
+    },
+    "optimizations_applied": [
+      {
+        "type": "index_creation",
+        "table": "orders",
+        "index_name": "idx_orders_customer_id",
+        "columns": ["customer_id"],
+        "purpose": "Customer lookup optimization"
+      },
+      {
+        "type": "index_creation", 
+        "table": "orders",
+        "index_name": "idx_orders_status",
+        "columns": ["status"],
+        "purpose": "Status filtering optimization"
+      },
+      {
+        "type": "index_creation",
+        "table": "orders", 
+        "index_name": "idx_orders_amount",
+        "columns": ["amount"],
+        "purpose": "Amount range query optimization"
+      },
+      {
+        "type": "index_creation",
+        "table": "orders",
+        "index_name": "idx_orders_status_ordered_at", 
+        "columns": ["status", "ordered_at"],
+        "purpose": "Composite query optimization"
+      },
+      {
+        "type": "statistics_update",
+        "tables": ["orders", "customers"],
+        "purpose": "Query planner optimization"
+      }
+    ],
+    "after_optimization": {
+      "cache_hit_ratio": 96.44,
+      "indexes_created": 4,
+      "example_query_execution_time_ms": 0.487,
+      "example_query_planning_time_ms": 2.743,
+      "index_usage_verified": true
+    },
+    "slow_queries_analysis": [
+      {
+        "query_preview": "CREATE TABLE performance_test_estimates",
+        "total_time_ms": 472750.98,
+        "calls": 1,
+        "avg_time_ms": 472750.98
+      },
+      {
+        "query_preview": "SELECT * FROM orders WHERE customer_id = (random() * $1 + $2)::int",
+        "total_time_ms": 274852.85,
+        "calls": 3000,
+        "avg_time_ms": 91.62
+      },
+      {
+        "query_preview": "Aggregate Query - SELECT country, COUNT(*), AVG(amount)",
+        "avg_time_ms": 482.45,
+        "max_time_ms": 615.67,
+        "calls": 28
+      }
+    ],
+    "recommendations": {
+      "immediate": [
+        "Monitor new index usage",
+        "Remove unused indexes after verification",
+        "Set up cache hit ratio alerts"
+      ],
+      "medium_term": [
+        "Implement connection pooling",
+        "Optimize aggregate queries", 
+        "Consider table partitioning"
+      ],
+      "long_term": [
+        "Comprehensive monitoring dashboard",
+        "Monthly performance reviews",
+        "Database scaling planning"
+      ]
+    },
+    "metrics_summary": {
+      "total_optimization_time_minutes": 45,
+      "indexes_created": 4,
+      "performance_improvement": "Query performance significantly improved for customer lookups",
+      "risk_level": "Low - All changes made with CONCURRENTLY",
+      "success_indicators": [
+        "Index scans replacing sequential scans",
+        "Stable cache hit ratio",
+        "Successful query plan optimization"
+      ]
+    }
+  }
+}

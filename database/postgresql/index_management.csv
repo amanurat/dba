@@ -1,0 +1,13 @@
+Table,Index Name,Type,Usage Count,Size,Status,Action,Priority,Notes
+customers,customers_pkey,Primary,535451,2.2 MB,🟢 Active,Keep,Low,Heavily used
+orders,orders_pkey,Primary,0,22 MB,🔴 Unused,Review,High,Never used - investigate
+customers,customers_email_key,Unique,0,6.9 MB,🔴 Unused,Review,Medium,Check if needed
+orders,idx_orders_customer_id,B-tree,1,~4 MB,🟢 New,Monitor,High,Just created
+orders,idx_orders_status,B-tree,0,~3 MB,🟡 New,Monitor,High,Awaiting usage
+orders,idx_orders_amount,B-tree,0,~4 MB,🟡 New,Monitor,High,For range queries
+orders,idx_orders_status_ordered_at,Composite,0,~4 MB,🟡 New,Monitor,High,Complex queries
+
+Status,Count,Total Size,Action Required,Priority
+🟢 Active & Useful,1,2.2 MB,Keep monitoring,Low
+🟡 Newly Created,4,~15 MB,Monitor usage,High
+🔴 Unused (Waste),2,28+ MB,Consider removal,Medium
