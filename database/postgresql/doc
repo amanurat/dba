@@ -1,0 +1,12 @@
+-- ดูขนาด Database ปัจจุบัน
+-- ดูจำนวน Connection ปัจจุบัน
+-- ดู Cache Hit Ratio (ตัวชี้วัดสำคัญ)
+-- วิเคราะห์ Query ช้า
+-- ตรวจสอบ Index
+
+
+**จากคะแนนแต่ละหมวด ปัญหาหลักคือ:**
+- [ ] **Memory ไม่เพียงพอ** (Memory Score < 20)
+- [ ] **Query ช้าเยอะ** (Query Score < 20)
+- [ ] **Index ไม่เหมาะสม** (Index Score < 20)
+- [ ] **Database ใหญ่เกิน** (Size Score < 10)
