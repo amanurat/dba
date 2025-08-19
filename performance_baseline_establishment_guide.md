@@ -99,7 +99,7 @@ mysql -e "SHOW VARIABLES;" > baseline_configs/$(date +%Y%m%d)/mysql_config.txt
 az postgres server configuration list --resource-group $RG --server-name $PG_SERVER > baseline_configs/$(date +%Y%m%d)/azure_pg_config.json
 az mysql server configuration list --resource-group $RG --server-name $MYSQL_SERVER > baseline_configs/$(date +%Y%m%d)/azure_mysql_config.json
 ```
-
+az postgres server configuration list --resource-group poc-db --server-name pgus.postgres.database.azure.com > baseline_configs/$(date +%Y%m%d)/azure_pg_config.json
 ## PostgreSQL Baseline
 
 ### 1. Performance Metrics Collection
@@ -156,13 +156,13 @@ SELECT
     now() as baseline_date,
     query,
     calls,
-    total_time,
-    mean_time,
+    total_exec_time,
+    mean_exec_time,
     rows,
     100.0 * shared_blks_hit / nullif(shared_blks_hit + shared_blks_read, 0) as hit_percent
 FROM pg_stat_statements 
 WHERE calls > 100  -- Only frequently executed queries
-ORDER BY total_time DESC
+ORDER BY total_exec_time DESC
 LIMIT 50;
 
 -- Reset statistics after baseline period
