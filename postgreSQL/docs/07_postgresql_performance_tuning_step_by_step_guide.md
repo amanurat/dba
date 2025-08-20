@@ -459,7 +459,7 @@ az postgres flexible-server restart \
 -- วิธีแก้: เพิ่ม Index ที่คอลัมน์ status
 
 CREATE INDEX CONCURRENTLY idx_orders_status 
-ON orders (status);
+ON my_orders (status);
 ```
 
 **แบบที่ 2: Query แบบ ORDER BY ช้า**
@@ -477,7 +477,7 @@ ON users (created_at);
 -- วิธีแก้: เพิ่ม Index ที่ foreign key
 
 CREATE INDEX CONCURRENTLY idx_orders_customer_id 
-ON orders (customer_id);
+ON my_orders (customer_id);
 ```
 
 **💡 หลักการเลือก Index:**
@@ -518,11 +518,11 @@ DROP INDEX IF EXISTS idx_old_user_code;
 -- ตัวอย่าง: Table orders มี Sequential Scan เยอะ
 -- และ Query ส่วนใหญ่เป็น WHERE status = ?
 CREATE INDEX CONCURRENTLY idx_orders_status 
-ON orders (status);
+ON my_orders (status);
 
 -- หรือ WHERE customer_id = ?
 CREATE INDEX CONCURRENTLY idx_orders_customer_id 
-ON orders (customer_id);
+ON my_orders (customer_id);
 ```
 
 ### **5.4 อัปเดตสถิติ (🟢 ปลอดภัย)**
@@ -534,8 +534,8 @@ ON orders (customer_id);
 ANALYZE;
 
 -- หรือเฉพาะ Table ที่เปลี่ยนข้อมูลเยอะ
-ANALYZE orders;
-ANALYZE customers;
+ANALYZE my_orders;
+ANALYZE my_customers;
 ```
 
 ### **📝 บันทึกการแก้ไข:**
@@ -587,7 +587,7 @@ FROM pg_statio_user_tables;
 \timing on
 
 -- รัน Query เดิมที่ช้า
-SELECT * FROM orders WHERE status = 'pending';
+SELECT * FROM my_orders WHERE status = 'pending';
 
 \timing off
 ```

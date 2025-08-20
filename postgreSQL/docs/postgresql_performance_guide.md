@@ -471,7 +471,7 @@ SET work_mem = '32MB';  -- ชั่วคราว
 ```sql
 -- Query ช้า: SELECT * FROM orders WHERE status = 'pending'
 -- Index ที่ต้องการ:
-CREATE INDEX CONCURRENTLY idx_orders_status ON orders (status);
+CREATE INDEX CONCURRENTLY idx_orders_status ON my_orders (status);
 ```
 
 **Pattern 2: ORDER BY**
@@ -485,14 +485,14 @@ CREATE INDEX CONCURRENTLY idx_users_created_at_desc ON users (created_at DESC);
 ```sql
 -- Query ช้า: SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id
 -- Index ที่ต้องการ:
-CREATE INDEX CONCURRENTLY idx_orders_customer_id ON orders (customer_id);
+CREATE INDEX CONCURRENTLY idx_orders_customer_id ON my_orders (customer_id);
 ```
 
 **Pattern 4: Multiple WHERE conditions**
 ```sql
 -- Query ช้า: SELECT * FROM orders WHERE status = 'pending' AND created_at > '2024-01-01'
 -- Index ที่ต้องการ:
-CREATE INDEX CONCURRENTLY idx_orders_status_created ON orders (status, created_at);
+CREATE INDEX CONCURRENTLY idx_orders_status_created ON my_orders (status, created_at);
 ```
 
 **Pattern 5: Text Search**
@@ -552,13 +552,13 @@ COMMIT;
 
 -- ตัวอย่าง: orders table
 -- ถ้า Query ส่วนใหญ่เป็น WHERE status = ?
-CREATE INDEX CONCURRENTLY idx_orders_status ON orders (status);
+CREATE INDEX CONCURRENTLY idx_orders_status ON my_orders (status);
 
 -- ถ้า Query ส่วนใหญ่เป็น WHERE customer_id = ?
-CREATE INDEX CONCURRENTLY idx_orders_customer_id ON orders (customer_id);
+CREATE INDEX CONCURRENTLY idx_orders_customer_id ON my_orders (customer_id);
 
 -- ถ้า Query ส่วนใหญ่เป็น ORDER BY created_at
-CREATE INDEX CONCURRENTLY idx_orders_created_at ON orders (created_at);
+CREATE INDEX CONCURRENTLY idx_orders_created_at ON my_orders (created_at);
 ```
 
 ### 5.4 แก้ไขปัญหา Database ขนาดใหญ่ (🟠 ความเสี่ยงสูง)
@@ -571,8 +571,8 @@ CREATE INDEX CONCURRENTLY idx_orders_created_at ON orders (created_at);
 VACUUM ANALYZE;
 
 -- หรือทำเฉพาะ Table ที่มีปัญหา
-VACUUM ANALYZE orders;
-VACUUM ANALYZE customers;
+VACUUM ANALYZE my_orders;
+VACUUM ANALYZE my_customers;
 VACUUM ANALYZE products;
 ```
 
@@ -662,7 +662,7 @@ ORDER BY mean_exec_time DESC;
 \timing on
 
 -- ทดสอบ Query ที่เคยช้า
-SELECT * FROM orders WHERE status = 'pending';
+SELECT * FROM my_orders WHERE status = 'pending';
 SELECT * FROM users ORDER BY created_at DESC LIMIT 10;
 
 \timing off
@@ -819,8 +819,8 @@ SELECT
     current_setting('shared_buffers') as shared_buffers_setting;
 
 -- 3. Warm up cache ด้วยการรัน Query หลักๆ
-SELECT count(*) FROM orders;
-SELECT count(*) FROM customers;
+SELECT count(*) FROM my_orders;
+SELECT count(*) FROM my_customers;
 ```
 
 ### ❓ "Index ใหม่ไม่ถูกใช้"
@@ -836,11 +836,11 @@ SELECT count(*) FROM customers;
 ANALYZE table_name;
 
 -- 2. ดู Query Plan
-EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM orders WHERE status = 'pending';
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM my_orders WHERE status = 'pending';
 
 -- 3. บังคับใช้ Index (ทดสอบ)
 SET enable_seqscan = off;
-EXPLAIN SELECT * FROM orders WHERE status = 'pending';
+EXPLAIN SELECT * FROM my_orders WHERE status = 'pending';
 SET enable_seqscan = on;
 ```
 
@@ -855,18 +855,18 @@ SET enable_seqscan = on;
 ```sql
 -- 1. ดู Query Plan ละเอียด
 EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
-SELECT * FROM orders o
-                  JOIN customers c ON o.customer_id = c.id
+SELECT * FROM my_orders o
+                  JOIN my_customers c ON o.customer_id = c.id
 WHERE o.status = 'pending';
 
 -- 2. ลอง Composite Index
 CREATE INDEX CONCURRENTLY idx_orders_status_customer
-    ON orders (status, customer_id);
+    ON my_orders (status, customer_id);
 
 -- 3. ลิมิตข้อมูลที่ดึง
 SELECT o.id, o.status, c.name
-FROM orders o
-         JOIN customers c ON o.customer_id = c.id
+FROM my_orders o
+         JOIN my_customers c ON o.customer_id = c.id
 WHERE o.status = 'pending'
 LIMIT 100;
 ```
