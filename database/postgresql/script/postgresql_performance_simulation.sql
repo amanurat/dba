@@ -93,7 +93,8 @@ CREATE TABLE reviews (
     review_text TEXT,
     is_verified BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(product_id, customer_id)  -- ป้องกัน customer คนเดียวรีวิว product เดียวกันซ้ำ
 );
 
 -- ========================================
@@ -209,23 +210,42 @@ CROSS JOIN LATERAL (
     SELECT generate_series(1, (random() * 4 + 1)::integer)
 ) AS series;
 
--- Insert reviews (100,000 records)
+-- Insert reviews (ประมาณ 80,000-100,000 records)
+-- ใช้วิธี safe insert กับ ON CONFLICT เพื่อหลีกเลี่ยง duplicate
+WITH review_candidates AS (
+    SELECT 
+        p.id as product_id,
+        c.id as customer_id,
+        (random() * 5 + 1)::integer as rating,
+        CASE WHEN random() > 0.3 THEN 
+            'This is a review for ' || p.name || '. ' || 
+            CASE (random() * 3)::integer
+                WHEN 0 THEN 'Excellent quality and fast delivery!'
+                WHEN 1 THEN 'Good value for money, recommended.'
+                ELSE 'Average product, nothing special.'
+            END
+        ELSE NULL END as review_text,
+        CASE WHEN random() > 0.4 THEN true ELSE false END as is_verified,
+        NOW() - (random() * interval '12 months') as created_at,
+        row_number() OVER (PARTITION BY p.id, c.id ORDER BY random()) as rn
+    FROM products p 
+    CROSS JOIN customers c
+    WHERE p.is_active = true 
+        AND c.is_active = true
+        AND random() < 0.05  -- เฉพาะ 5% ของ combinations เพื่อให้ realistic
+)
 INSERT INTO reviews (product_id, customer_id, rating, review_text, is_verified, created_at)
 SELECT 
-    (random() * 9999 + 1)::integer,
-    (random() * 49999 + 1)::integer,
-    (random() * 5 + 1)::integer,
-    CASE WHEN random() > 0.3 THEN 
-        'This is a review for product. ' || 
-        CASE (random() * 3)::integer
-            WHEN 0 THEN 'Excellent quality and fast delivery!'
-            WHEN 1 THEN 'Good value for money, recommended.'
-            ELSE 'Average product, nothing special.'
-        END
-    ELSE NULL END,
-    CASE WHEN random() > 0.4 THEN true ELSE false END,
-    NOW() - (random() * interval '12 months')
-FROM generate_series(1, 100000) AS i;
+    product_id,
+    customer_id, 
+    rating,
+    review_text,
+    is_verified,
+    created_at
+FROM review_candidates 
+WHERE rn = 1  -- เฉพาะ record แรกต่อ combination เพื่อหลีกเลี่ยง duplicate
+LIMIT 100000
+ON CONFLICT (product_id, customer_id) DO NOTHING;
 
 -- Update table statistics
 ANALYZE customers, products, orders, order_items, reviews;

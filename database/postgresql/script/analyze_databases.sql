@@ -1,5 +1,5 @@
 -- List all databases
-SELECT datname FROM pg_database WHERE datistemplate = false AND datallowconn = true AND datname NOT IN ('postgres', 'template0', 'template1');
+SELECT datname FROM pg_database WHERE datistemplate = false AND datallowconn = true AND datname NOT IN ('postgres', 'template0', 'template1','azure_sys','azure_maintenance');
 
 -- 1. ตรวจสอบค่าปัจจุบัน
 SHOW shared_buffers;
