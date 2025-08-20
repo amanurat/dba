@@ -13,6 +13,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- For text search optimization
 
 -- Reset statistics to start fresh
 SELECT pg_stat_statements_reset();
+SELECT pg_stat_reset();
 
 -- ========================================
 -- 2. CREATE SAMPLE TABLES (E-COMMERCE SCENARIO)
@@ -330,18 +331,20 @@ WHERE c.registration_date >= '2023-01-01'
 ORDER BY completed_orders DESC;
 
 -- Now check for slow queries
-SELECT 
-    LEFT(query, 100) as query_preview,
-    calls as จำนวนครั้ง,
-    ROUND(total_exec_time::numeric, 2) as รวมเวลา_ms,
-    ROUND(mean_exec_time::numeric, 2) as เฉลี่ย_ms,
-    ROUND((100.0 * total_exec_time / sum(total_exec_time) OVER()), 2) as เปอร์เซ็นต์
-FROM pg_stat_statements 
+-- Now check for slow queries
+SELECT
+    LEFT(query, 100) AS query_preview,
+    calls AS จำนวนครั้ง,
+    ROUND(total_exec_time::numeric, 2) AS รวมเวลา_ms,
+    ROUND(mean_exec_time::numeric, 2) AS เฉลี่ย_ms,
+    ROUND((100.0 * total_exec_time / SUM(total_exec_time) OVER())::numeric, 2) AS เปอร์เซ็นต์
+FROM pg_stat_statements
 WHERE query NOT LIKE '%pg_stat_statements%'
-    AND query NOT LIKE '%pg_stat_activity%'
-    AND mean_exec_time > 10  -- Only queries > 10ms
-ORDER BY total_exec_time DESC 
+  AND query NOT LIKE '%pg_stat_activity%'
+  AND (total_exec_time / NULLIF(calls, 0)) > 10  -- Only queries > 10ms
+ORDER BY total_exec_time DESC
 LIMIT 10;
+
 
 -- ========================================
 -- 7. STEP 3 QUERIES: INDEX ANALYSIS  
@@ -362,7 +365,7 @@ ORDER BY pg_relation_size(indexrelid) DESC;
 -- 7.2 Find tables needing indexes (too many full table scans)
 SELECT 
     schemaname,
-    relname as table_name,
+    ps.relname as table_name,
     seq_scan as full_table_scans,
     idx_scan as index_scans,
     ROUND(100.0 * seq_scan / NULLIF(seq_scan + idx_scan, 0), 1) as scan_ratio,
@@ -491,7 +494,9 @@ SELECT
         WHEN mean_exec_time < 1000 THEN '🟠 Slow'
         ELSE '🔴 Very Slow'
     END as performance_status
-FROM slow_queries;
+FROM slow_queries
+where query like '%SELECT%'
+;
 
 -- ========================================
 -- 11. STABILITY & MAINTENANCE EXAMPLES
@@ -535,7 +540,7 @@ FROM cache_stats, slow_queries, long_transactions;
 -- Auto vacuum status
 SELECT 
     schemaname,
-    tablename,
+    relname,
     last_vacuum,
     last_autovacuum,
     n_dead_tup,
