@@ -161,6 +161,9 @@ FROM pg_stat_statements
 WHERE query NOT LIKE '%pg_stat_statements%'
     AND query NOT LIKE '%COMMIT%'
     AND query NOT LIKE '%BEGIN%'
+    AND query NOT LIKE '%ANALYZE%'
+    AND query NOT LIKE '%CREATE INDEX%'
+    AND query NOT LIKE '%SELECT query_store%'
     AND total_exec_time > 0
 ORDER BY total_exec_time DESC 
 LIMIT 10;
@@ -183,8 +186,14 @@ SELECT
 FROM pg_stat_statements 
 WHERE query NOT LIKE '%pg_stat_statements%'
     AND query NOT LIKE '%COMMIT%'
+    AND query NOT LIKE '%commit%'
     AND query NOT LIKE '%BEGIN%'
-ORDER BY calls DESC 
+    AND query NOT LIKE '%begin%'
+    AND query NOT LIKE '%CLOSE ALL%'
+    AND query NOT LIKE '%RESET ALL%'
+    AND query NOT LIKE '%DISCARD%'
+    AND query NOT LIKE '%UNLISTEN%'
+ORDER BY calls DESC
 LIMIT 10;
 
 \echo ''
@@ -350,7 +359,6 @@ ORDER BY pa.query_start;
 -- ---------------------------------------------------------------------------------------------------------
 -- STEP 5: PERFORMANCE BOTTLENECK DETECTION
 -- ---------------------------------------------------------------------------------------------------------
-
 \echo '>>> STEP 5: Performance Bottleneck Detection'
 \echo '-------------------------------------------'
 \echo 'Analyzing: Critical performance issues and resource bottlenecks'

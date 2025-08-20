@@ -8,20 +8,20 @@
 -- ========================================
 
 -- 1.1 ตรวจสอบสถานะ Table Bloat (ตารางพองตัว)
-SELECT 
+SELECT
     schemaname,
-    tablename,
-    n_live_tup as live_rows,
-    n_dead_tup as dead_rows,
-    ROUND(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 2) as dead_ratio,
-    pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as table_size,
+    relname AS tablename,
+    n_live_tup AS live_rows,
+    n_dead_tup AS dead_rows,
+    ROUND(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 2) AS dead_ratio,
+    pg_size_pretty(pg_total_relation_size((quote_ident(schemaname) || '.' || quote_ident(relname))::regclass)) AS table_size,
     last_vacuum,
     last_autovacuum,
     last_analyze,
     last_autoanalyze
-FROM pg_stat_user_tables 
-WHERE n_dead_tup > 0
+FROM pg_stat_user_tables
 ORDER BY dead_ratio DESC, n_dead_tup DESC;
+
 
 -- 1.2 สร้างข้อมูล Dead Tuples เพื่อทดสอบ VACUUM
 -- (จำลองการ UPDATE/DELETE จำนวนมาก)
@@ -31,15 +31,16 @@ WHERE id <= 10000;
 DELETE FROM orders WHERE id BETWEEN 5000 AND 6000;
 
 -- ตรวจสอบ Dead Tuples หลังการ UPDATE/DELETE
-SELECT 
+SELECT
     schemaname,
-    tablename,
+    relname AS tablename,
     n_live_tup,
     n_dead_tup,
-    ROUND(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 2) as dead_ratio,
-    pg_size_pretty(pg_total_relation_size('orders')) as total_size
-FROM pg_stat_user_tables 
-WHERE tablename = 'orders';
+    ROUND(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 2) AS dead_ratio,
+    pg_size_pretty(pg_total_relation_size((quote_ident(schemaname) || '.' || quote_ident(relname))::regclass)) AS total_size
+FROM pg_stat_user_tables
+WHERE relname = 'orders';
+
 
 -- 1.3 VACUUM แบบต่างๆ และการวัดผล
 
@@ -94,33 +95,38 @@ WHERE query LIKE '%autovacuum%'
 
 -- 2.1 ตรวจสอบ Index Bloat
 WITH index_bloat AS (
-    SELECT 
-        schemaname,
-        tablename,
-        indexname,
-        pg_size_pretty(pg_relation_size(indexrelid)) as index_size,
-        pg_relation_size(indexrelid) as index_bytes,
-        idx_scan,
-        idx_tup_read,
-        idx_tup_fetch,
+    SELECT
+        nspname AS schemaname,
+        cls.relname AS tablename,
+        idx.relname AS indexname,
+        pg_size_pretty(pg_relation_size(idx.oid)) AS index_size,
+        pg_relation_size(idx.oid) AS index_bytes,
+        psui.idx_scan,
+        psui.idx_tup_read,
+        psui.idx_tup_fetch,
         -- สัดส่วนการใช้งาน index
-        CASE 
-            WHEN idx_scan = 0 THEN 'UNUSED'
-            WHEN idx_scan < 100 THEN 'LOW_USAGE'
-            WHEN idx_scan < 1000 THEN 'MEDIUM_USAGE'
+        CASE
+            WHEN psui.idx_scan = 0 THEN 'UNUSED'
+            WHEN psui.idx_scan < 100 THEN 'LOW_USAGE'
+            WHEN psui.idx_scan < 1000 THEN 'MEDIUM_USAGE'
             ELSE 'HIGH_USAGE'
-        END as usage_level
-    FROM pg_stat_user_indexes
+            END AS usage_level
+    FROM pg_stat_user_indexes psui
+             JOIN pg_index pi ON psui.indexrelid = pi.indexrelid
+             JOIN pg_class idx ON psui.indexrelid = idx.oid
+             JOIN pg_class cls ON pi.indrelid = cls.oid
+             JOIN pg_namespace nsp ON cls.relnamespace = nsp.oid
 )
 SELECT *,
-    CASE 
-        WHEN usage_level = 'UNUSED' AND index_bytes > 1024*1024 THEN '🔴 DROP CANDIDATE'
-        WHEN usage_level = 'LOW_USAGE' AND index_bytes > 10*1024*1024 THEN '🟡 REVIEW NEEDED'
-        WHEN usage_level IN ('MEDIUM_USAGE', 'HIGH_USAGE') THEN '🟢 KEEP'
-        ELSE '⚪ MONITOR'
-    END as recommendation
+       CASE
+           WHEN usage_level = 'UNUSED' AND index_bytes > 1024*1024 THEN '🔴 DROP CANDIDATE'
+           WHEN usage_level = 'LOW_USAGE' AND index_bytes > 10*1024*1024 THEN '🟡 REVIEW NEEDED'
+           WHEN usage_level IN ('MEDIUM_USAGE', 'HIGH_USAGE') THEN '🟢 KEEP'
+           ELSE '⚪ MONITOR'
+           END AS recommendation
 FROM index_bloat
 ORDER BY index_bytes DESC;
+
 
 -- 2.2 สร้าง Index ที่จะ Bloated เพื่อทดสอบ REINDEX
 CREATE INDEX idx_test_bloat ON orders (created_at, status, customer_id);
@@ -348,22 +354,23 @@ SELECT
     '🏥 TABLE HEALTH CHECK' as title,
     '─────────────────────────────────────' as separator;
 
-SELECT 
-    tablename,
-    pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size,
-    n_live_tup as live_rows,
-    n_dead_tup as dead_rows,
-    ROUND(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 1) as bloat_pct,
-    CASE 
+-- Main query
+SELECT
+    relname AS tablename,
+    pg_size_pretty(pg_total_relation_size((quote_ident(schemaname) || '.' || quote_ident(relname))::regclass)) AS size,
+    n_live_tup AS live_rows,
+    n_dead_tup AS dead_rows,
+    ROUND(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 1) AS bloat_pct,
+    CASE
         WHEN n_dead_tup = 0 THEN '🟢'
         WHEN n_dead_tup < 1000 THEN '🟡'
         WHEN n_dead_tup < 10000 THEN '🟠'
         ELSE '🔴'
-    END as health_status,
-    COALESCE(last_vacuum, last_autovacuum)::date as last_vacuum_date
+        END AS health_status,
+    COALESCE(last_vacuum, last_autovacuum)::date AS last_vacuum_date
 FROM pg_stat_user_tables
-WHERE pg_total_relation_size(schemaname||'.'||tablename) > 1024*1024  -- Tables > 1MB
-ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+WHERE pg_total_relation_size((quote_ident(schemaname) || '.' || quote_ident(relname))::regclass) > 1024*1024  -- Tables > 1MB
+ORDER BY pg_total_relation_size((quote_ident(schemaname) || '.' || quote_ident(relname))::regclass) DESC
 LIMIT 10;
 
 -- ========================================
@@ -376,31 +383,171 @@ SELECT
     '─────────────────────────────────────' as separator;
 
 -- Memory Settings
-SELECT 
-    'Memory Configuration' as category,
+SELECT
+    'Memory Configuration' AS category,
     name,
-    setting || COALESCE(' ' || unit, '') as current_value,
+    setting || COALESCE(' ' || unit, '') AS current_value,
     short_desc,
     CASE name
-        WHEN 'shared_buffers' THEN 
-            CASE 
-                WHEN pg_size_bytes(setting || COALESCE(unit, '')) < 256*1024*1024 THEN '🔴 Too Low (< 256MB)'
-                WHEN pg_size_bytes(setting || COALESCE(unit, '')) < 512*1024*1024 THEN '🟡 Low (< 512MB)'
-                WHEN pg_size_bytes(setting || COALESCE(unit, '')) < 2*1024*1024*1024 THEN '🟢 Good (512MB-2GB)'
+        WHEN 'shared_buffers' THEN
+            CASE
+                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 256*1024*1024 THEN '🔴 Too Low (< 256MB)'
+                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 512*1024*1024 THEN '🟡 Low (< 512MB)'
+                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 2*1024*1024*1024 THEN '🟢 Good (512MB-2GB)'
                 ELSE '🟢 Excellent (> 2GB)'
-            END
+                END
         WHEN 'work_mem' THEN
-            CASE 
-                WHEN pg_size_bytes(setting || COALESCE(unit, '')) < 4*1024*1024 THEN '🔴 Too Low (< 4MB)'
-                WHEN pg_size_bytes(setting || COALESCE(unit, '')) < 16*1024*1024 THEN '🟡 Low (< 16MB)'
-                WHEN pg_size_bytes(setting || COALESCE(unit, '')) < 64*1024*1024 THEN '🟢 Good (16-64MB)'
+            CASE
+                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 4*1024*1024 THEN '🔴 Too Low (< 4MB)'
+                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 16*1024*1024 THEN '🟡 Low (< 16MB)'
+                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 64*1024*1024 THEN '🟢 Good (16-64MB)'
                 ELSE '🟠 High (> 64MB - check max_connections)'
-            END
+                END
         ELSE '⚪ Manual Review'
-    END as recommendation
-FROM pg_settings 
+        END AS recommendation
+FROM pg_settings
 WHERE name IN ('shared_buffers', 'work_mem', 'effective_cache_size', 'maintenance_work_mem')
 ORDER BY name;
+
+-- 6.1 Current Configuration Analysis
+SELECT
+    '⚙️ CONFIGURATION ANALYSIS' as title,
+    '─────────────────────────────────────' as separator;
+
+-- Memory Settings with cleaner approach using CTE
+-- 6.1 Current Configuration Analysis
+SELECT
+    '⚙️ CONFIGURATION ANALYSIS' as title,
+    '─────────────────────────────────────' as separator;
+
+-- Memory Settings with human-readable values
+WITH config_bytes AS (
+    SELECT
+        name,
+        setting,
+        unit,
+        short_desc,
+        setting::bigint *
+        CASE COALESCE(unit, '')
+            WHEN 'kB' THEN 1024
+            WHEN 'MB' THEN 1024*1024
+            WHEN 'GB' THEN 1024*1024*1024::bigint
+            WHEN '8kB' THEN 8192
+            WHEN 'B' THEN 1
+            ELSE 1
+            END as bytes_value
+    FROM pg_settings
+    WHERE name IN ('shared_buffers', 'work_mem', 'effective_cache_size', 'maintenance_work_mem')
+)
+SELECT
+    'Memory Configuration' AS category,
+    name,
+    -- Convert to human-readable format
+    CASE
+        WHEN bytes_value >= 1024*1024*1024 THEN
+            ROUND(bytes_value::numeric / (1024*1024*1024), 1) || ' GB'
+        WHEN bytes_value >= 1024*1024 THEN
+            ROUND(bytes_value::numeric / (1024*1024), 0) || ' MB'
+        WHEN bytes_value >= 1024 THEN
+            ROUND(bytes_value::numeric / 1024, 0) || ' kB'
+        ELSE bytes_value || ' bytes'
+        END AS current_value,
+    short_desc,
+    CASE name
+        WHEN 'shared_buffers' THEN
+            CASE
+                WHEN bytes_value < 256*1024*1024 THEN '🔴 Too Low (< 256MB)'
+                WHEN bytes_value < 512*1024*1024 THEN '🟡 Low (< 512MB)'
+                WHEN bytes_value < 2*1024*1024*1024::bigint THEN '🟢 Good (512MB-2GB)'
+                ELSE '🟢 Excellent (> 2GB)'
+                END
+        WHEN 'work_mem' THEN
+            CASE
+                WHEN bytes_value < 4*1024*1024 THEN '🔴 Too Low (< 4MB)'
+                WHEN bytes_value < 16*1024*1024 THEN '🟡 Low (< 16MB)'
+                WHEN bytes_value < 64*1024*1024 THEN '🟢 Good (16-64MB)'
+                ELSE '🟠 High (> 64MB - check max_connections)'
+                END
+        ELSE '⚪ Manual Review'
+        END AS recommendation
+FROM config_bytes
+ORDER BY name;
+
+-- ตรวจสอบ queries ที่ใช้ temp files
+SELECT
+    query,
+    calls,
+    temp_blks_read,
+    temp_blks_written,
+    temp_blks_written * 8192 / 1024 / 1024 as temp_mb
+FROM pg_stat_statements
+WHERE temp_blks_written > 0
+ORDER BY temp_blks_written DESC
+LIMIT 10;
+
+-- ตรวจสอบ memory usage ปัจจุบัน
+SELECT
+    pg_size_pretty(pg_total_relation_size('pg_class')) as system_catalog_size,
+    pg_size_pretty(sum(pg_total_relation_size(schemaname||'.'||tablename))) as total_table_size
+FROM pg_tables
+WHERE schemaname NOT IN ('information_schema', 'pg_catalog');
+
+-- รวมทั้ง Table และ Index hit ratio
+SELECT
+    'Table Buffer Hit Ratio' AS metric,
+    ROUND(SUM(t.heap_blks_hit) * 100.0 /
+          NULLIF(SUM(t.heap_blks_hit) + SUM(t.heap_blks_read), 0), 2)::text || '%' AS value
+FROM pg_statio_user_tables t
+
+UNION ALL
+SELECT
+    'Index Hit Ratio' AS metric,
+    ROUND(SUM(i.idx_blks_hit) * 100.0 /
+          NULLIF(SUM(i.idx_blks_hit) + SUM(i.idx_blks_read), 0), 2)::text || '%' AS value
+FROM pg_statio_user_indexes i
+
+UNION ALL
+SELECT
+    'Total Cache Hit Ratio' AS metric,
+    ROUND((SUM(t.heap_blks_hit) + SUM(i.idx_blks_hit)) * 100.0 /
+          NULLIF(SUM(t.heap_blks_hit) + SUM(t.heap_blks_read) +
+                 SUM(i.idx_blks_hit) + SUM(i.idx_blks_read), 0), 2)::text || '%' AS value
+FROM pg_statio_user_tables t
+         JOIN pg_statio_user_indexes i ON t.relid = i.relid;
+
+-- ตรวจสอบ buffer hit ratio (ใช้ pg_stat_database)
+SELECT
+    'Shared Buffers Hit Ratio' as metric,
+    round(
+            (sum(blks_hit) * 100.0) /
+            NULLIF(sum(blks_hit) + sum(blks_read), 0), 2
+    ) as hit_ratio_percent,
+    CASE
+        WHEN round(
+                     (sum(blks_hit) * 100.0) /
+                     NULLIF(sum(blks_hit) + sum(blks_read), 0), 2
+             ) >= 95 THEN '🟢 Excellent'
+        WHEN round(
+                     (sum(blks_hit) * 100.0) /
+                     NULLIF(sum(blks_hit) + sum(blks_read), 0), 2
+             ) >= 90 THEN '🟡 Good'
+        ELSE '🔴 Needs Improvement'
+        END as status
+FROM pg_stat_database
+WHERE datname = current_database();
+
+-- หรือใช้วิธีที่ง่ายกว่า (แนะนำ)
+SELECT
+    'Buffer Hit Ratio' as metric,
+    round(
+            (sum(blks_hit)::numeric / NULLIF(sum(blks_hit) + sum(blks_read), 0)) * 100, 2
+    ) || '%' as hit_ratio,
+    sum(blks_hit) as buffer_hits,
+    sum(blks_read) as disk_reads,
+    sum(blks_hit) + sum(blks_read) as total_reads
+FROM pg_stat_database
+WHERE datname = current_database();
+
 
 -- Connection Settings
 SELECT 

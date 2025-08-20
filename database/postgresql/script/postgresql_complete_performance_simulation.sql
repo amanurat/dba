@@ -264,11 +264,11 @@ ANALYZE customers, products, orders, order_items, reviews;
 -- ========================================
 
 -- สร้าง indexes ที่ไม่ดีเพื่อจำลองปัญหา
-CREATE INDEX idx_customers_unused1 ON customers (phone);
-CREATE INDEX idx_customers_unused2 ON customers (address);
-CREATE INDEX idx_products_unused ON products (weight);
-CREATE INDEX idx_orders_unused ON orders (notes);
-CREATE INDEX idx_orders_wrong_order ON orders (total_amount, status); -- Wrong order
+CREATE INDEX idx_customers_unused1 ON customers (phone);    -- Rarely queried
+CREATE INDEX idx_customers_unused2 ON customers (address);  -- Text field, inefficient
+CREATE INDEX idx_products_unused ON products (weight);  -- Rarely queried
+CREATE INDEX idx_orders_unused ON orders (notes);   -- Text field, rarely queried
+CREATE INDEX idx_orders_wrong_order ON orders (total_amount, status); -- Wrong order for typical queries
 
 -- ========================================
 -- 5. BASELINE PERFORMANCE CAPTURE FUNCTIONS
