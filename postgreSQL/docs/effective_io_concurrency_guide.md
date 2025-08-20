@@ -99,6 +99,160 @@ ALTER SYSTEM SET effective_io_concurrency = 150;
 ALTER SYSTEM SET effective_io_concurrency = 200;
 ```
 
+## คำแนะนำเฉพาะสำหรับ Azure Database for PostgreSQL
+
+### การคำนวณตาม Azure Instance Size
+
+สำหรับ Azure Database for PostgreSQL แนะนำให้คำนวณจาก **Max IOPS** ของแต่ละ tier:
+
+**สูตรการคำนวณ**: `effective_io_concurrency = Max IOPS × 0.1`
+
+### ตัวอย่าง Azure Database Tiers
+
+#### Basic Tier (ไม่แนะนำให้ปรับ)
+```sql
+-- Basic tier มี IOPS จำกัดมาก ใช้ค่า default
+effective_io_concurrency = 1;  -- Keep default
+```
+
+#### General Purpose (Standard_B series - Burstable)
+```sql
+-- Standard_B1ms (1 vCore, 2GB, 640 IOPS)
+ALTER SYSTEM SET effective_io_concurrency = 64;
+
+-- Standard_B2s (2 vCores, 4GB, 1280 IOPS) 
+ALTER SYSTEM SET effective_io_concurrency = 128;
+
+-- Standard_B2ms (2 vCores, 8GB, 1280 IOPS)
+ALTER SYSTEM SET effective_io_concurrency = 128;
+
+-- Standard_B4ms (4 vCores, 16GB, 2560 IOPS)
+ALTER SYSTEM SET effective_io_concurrency = 200;
+```
+
+#### General Purpose (Standard_D series)
+```sql
+-- Standard_D2s_v3 (2 vCores, 8GB, 3200 IOPS)
+ALTER SYSTEM SET effective_io_concurrency = 200;
+
+-- Standard_D4s_v3 (4 vCores, 16GB, 6400 IOPS)
+ALTER SYSTEM SET effective_io_concurrency = 300;
+
+-- Standard_D8s_v3 (8 vCores, 32GB, 12800 IOPS)
+ALTER SYSTEM SET effective_io_concurrency = 400;
+```
+
+#### Memory Optimized (Standard_E series)
+```sql
+-- Standard_E2s_v3 (2 vCores, 16GB, 3200 IOPS)
+ALTER SYSTEM SET effective_io_concurrency = 200;
+
+-- Standard_E4s_v3 (4 vCores, 32GB, 6400 IOPS)
+ALTER SYSTEM SET effective_io_concurrency = 300;
+
+-- Standard_E8s_v3 (8 vCores, 64GB, 12800 IOPS)
+ALTER SYSTEM SET effective_io_concurrency = 400;
+```
+
+### การปรับแต่งสำหรับ Azure B-series (Burstable)
+
+**สำคัญ**: B-series ใช้ CPU Credit system จึงต้องระมัดระวังพิเศษ
+
+```sql
+-- สำหรับ B-series ควรเริ่มต้นด้วยค่าต่ำกว่าการคำนวณ
+-- เพื่อป้องกัน CPU credit หมด
+
+-- แทนที่จะใช้ค่าเต็ม ให้ใช้ 50-70% ของค่าที่คำนวณได้
+-- Standard_B2s: แทน 128 → ใช้ 64-90
+-- Standard_B4ms: แทน 256 → ใช้ 128-180
+```
+
+### การ Monitor สำหรับ Azure
+
+#### ตรวจสอบ IOPS Usage
+```sql
+-- Monitor I/O patterns
+SELECT 
+    datname,
+    blks_read as disk_reads,
+    blks_hit as buffer_hits,
+    CASE 
+        WHEN (blks_read + blks_hit) > 0 
+        THEN ROUND(blks_hit::numeric * 100.0 / (blks_read + blks_hit), 2) 
+        ELSE 0 
+    END as buffer_hit_ratio_percent
+FROM pg_stat_database 
+WHERE datname NOT IN ('template0', 'template1', 'postgres')
+ORDER BY (blks_read + blks_hit) DESC;
+```
+
+#### ตรวจสอบ CPU Credit (สำหรับ B-series)
+```bash
+# ใช้ Azure CLI หรือ Portal ดู CPU Credit Balance
+# หาก CPU Credit ต่ำ ควรลดค่า effective_io_concurrency
+```
+
+### แนวทางการทดสอบสำหรับ Azure
+
+#### 1. Baseline Testing
+```sql
+-- ก่อนเปลี่ยนค่า: ทดสอบ query สำคัญ
+SET effective_io_concurrency = 1;  -- Default
+EXPLAIN (ANALYZE, BUFFERS, TIMING) 
+SELECT * FROM critical_table 
+WHERE important_conditions;
+-- บันทึกเวลาและ buffer statistics
+```
+
+#### 2. Incremental Testing
+```sql
+-- ทดสอบค่าต่างๆ แบบค่อยเป็นค่อยไป
+SET effective_io_concurrency = 50;
+-- รัน test queries และบันทึกผล
+
+SET effective_io_concurrency = 100;  
+-- รัน test queries และบันทึกผล
+
+SET effective_io_concurrency = 150;
+-- รัน test queries และบันทึกผล
+```
+
+#### 3. Production Testing
+```sql
+-- เมื่อหาค่าที่ดีที่สุดแล้ว ใช้งานจริง
+ALTER SYSTEM SET effective_io_concurrency = [optimal_value];
+SELECT pg_reload_conf();
+
+-- Monitor ต่อเนื่องเป็นระยะเวลา 1-2 สัปดาห์
+```
+
+### ข้อควรระวังเฉพาะ Azure
+
+#### 1. **Burstable Performance (B-series)**
+- อย่าตั้งค่าสูงเกินไปหาก CPU credit ไม่เพียงพอ
+- Monitor CPU utilization ควบคู่กับ I/O performance
+
+#### 2. **Storage Scaling**
+- Azure Database สามารถ auto-scale storage ได้
+- เมื่อ storage เพิ่มขึ้น IOPS ก็เพิ่มตาม → อาจต้องปรับค่าใหม่
+
+#### 3. **Connection Pooling**
+- ใช้ connection pooling (pgBouncer) เพื่อลดแรงกดดันต่อระบบ
+- effective_io_concurrency ทำงานร่วมกับ connection pooling ได้ดี
+
+### ตารางอ้างอิงสำหรับ Azure
+
+| Azure Tier | vCores | Memory | Max IOPS | แนะนำ effective_io_concurrency |
+|------------|--------|--------|----------|--------------------------------|
+| B1ms       | 1      | 2 GB   | 640      | 64                            |
+| B2s        | 2      | 4 GB   | 1,280    | 90-128                        |
+| B2ms       | 2      | 8 GB   | 1,280    | 90-128                        |
+| B4ms       | 4      | 16 GB  | 2,560    | 150-200                       |
+| D2s_v3     | 2      | 8 GB   | 3,200    | 200-250                       |
+| D4s_v3     | 4      | 16 GB  | 6,400    | 300-400                       |
+| E2s_v3     | 2      | 16 GB  | 3,200    | 200-250                       |
+| E4s_v3     | 4      | 32 GB  | 6,400    | 300-400                       |
+
 ## ตัวอย่างผลกระทบต่อประสิทธิภาพ
 
 ### ก่อนการ Optimize (Default = 1)
