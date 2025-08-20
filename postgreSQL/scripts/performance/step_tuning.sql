@@ -232,14 +232,14 @@ SELECT
     schemaname,
     relname as table_name,
     indexrelname as index_name,
-    pg_size_pretty(pg_relation_size(indexrelid)) as wasted_space,
+    pg_size_pretty(pg_relation_size(pi.indexrelid)) as wasted_space,
     'DROP INDEX ' || schemaname || '.' || indexrelname || ';' as drop_statement
 FROM pg_stat_user_indexes psi
 JOIN pg_index pi ON psi.indexrelid = pi.indexrelid
 WHERE idx_scan = 0
     AND NOT pi.indisunique  -- Keep unique indexes
     AND NOT pi.indisprimary -- Keep primary key indexes
-ORDER BY pg_relation_size(indexrelid) DESC;
+ORDER BY pg_relation_size(pi.indexrelid) DESC;
 
 \echo ''
 
@@ -247,7 +247,7 @@ ORDER BY pg_relation_size(indexrelid) DESC;
 \echo 'Tables with High Sequential Scan Ratio (May Need Indexes):'
 SELECT 
     schemaname,
-    relname as table_name,
+    pc.relname as table_name,
     seq_scan,
     idx_scan,
     CASE WHEN (seq_scan + idx_scan) > 0 
@@ -562,15 +562,15 @@ LIMIT 5;
 
 SELECT 
     '-- DROP INDEX ' || schemaname || '.' || indexrelname || ';' as drop_statement,
-    '-- Space savings: ' || pg_size_pretty(pg_relation_size(indexrelid)) as space_savings,
+    '-- Space savings: ' || pg_size_pretty(pg_relation_size(pi.indexrelid)) as space_savings,
     '-- Impact: MEDIUM - Improves write performance, frees disk space' as impact
 FROM pg_stat_user_indexes psi
 JOIN pg_index pi ON psi.indexrelid = pi.indexrelid
 WHERE idx_scan = 0
     AND NOT pi.indisunique  
     AND NOT pi.indisprimary
-    AND pg_relation_size(indexrelid) > 1048576 -- >1MB
-ORDER BY pg_relation_size(indexrelid) DESC
+    AND pg_relation_size(pi.indexrelid) > 1048576 -- >1MB
+ORDER BY pg_relation_size(pi.indexrelid) DESC
 LIMIT 10;
 
 \echo ''
@@ -881,15 +881,19 @@ WITH performance_metrics AS (
                  WHERE mean_exec_time > 1000 AND calls > 10),
                 0
             ) as slow_query_ratio,
-            
+
             -- Unused index ratio
             COALESCE(
-                (SELECT COUNT(*)::numeric FILTER (WHERE idx_scan = 0) / NULLIF(COUNT(*), 0)
-                 FROM pg_stat_user_indexes psi
-                 JOIN pg_index pi ON psi.indexrelid = pi.indexrelid
-                 WHERE NOT pi.indisprimary),
-                0
-            ) as unused_index_ratio,
+                    (
+                        SELECT
+                                    COUNT(*) FILTER (WHERE idx_scan = 0)::numeric
+                                / NULLIF(COUNT(*), 0)
+                        FROM pg_stat_user_indexes psi
+                                 JOIN pg_index pi ON psi.indexrelid = pi.indexrelid
+                        WHERE NOT pi.indisprimary
+                    ),
+                    0
+            ) AS unused_index_ratio,
             
             -- Tables needing vacuum
             COALESCE(
