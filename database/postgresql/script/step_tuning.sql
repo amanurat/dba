@@ -444,65 +444,99 @@ ORDER BY
 
 -- Key Configuration Parameters Analysis
 \echo 'Current Configuration vs Recommendations:'
-SELECT 
+SELECT
     name as parameter,
     setting as current_value,
     unit,
-    CASE 
+    CASE
+        -- Convert memory parameters to human readable format
+        WHEN unit = 'kB' THEN
+            CASE
+                WHEN setting::bigint >= 1048576 THEN ROUND(setting::numeric / 1048576, 2) || ' GB'
+                WHEN setting::bigint >= 1024 THEN ROUND(setting::numeric / 1024, 2) || ' MB'
+                ELSE setting || ' KB'
+                END
+        WHEN unit = 'MB' THEN
+            CASE
+                WHEN setting::bigint >= 1024 THEN ROUND(setting::numeric / 1024, 2) || ' GB'
+                ELSE setting || ' MB'
+                END
+        WHEN unit = 'GB' THEN setting || ' GB'
+        WHEN unit = '8kB' THEN
+            CASE
+                WHEN setting::bigint * 8 >= 1048576 THEN ROUND((setting::numeric * 8) / 1048576, 2) || ' GB'
+                WHEN setting::bigint * 8 >= 1024 THEN ROUND((setting::numeric * 8) / 1024, 2) || ' MB'
+                ELSE (setting::bigint * 8) || ' KB'
+                END
+        WHEN unit IS NULL OR unit = '' THEN setting
+        ELSE setting || ' ' || unit
+        END as human_readable_value,
+    CASE
         -- Memory parameters
         WHEN name = 'shared_buffers' THEN
-            CASE 
-                WHEN setting::bigint * 
-                    CASE unit 
-                        WHEN 'kB' THEN 1024 
-                        WHEN 'MB' THEN 1024*1024 
-                        WHEN 'GB' THEN 1024*1024*1024 
-                        ELSE 1 
-                    END < 134217728 THEN '🔴 Consider increasing to 128MB+ (25% of RAM)'
+            CASE
+                WHEN setting::bigint *
+                     CASE unit
+                         WHEN 'kB' THEN 1024
+                         WHEN 'MB' THEN 1024*1024
+                         WHEN 'GB' THEN 1024*1024*1024
+                         WHEN '8kB' THEN 8*1024
+                         ELSE 1
+                         END < 134217728 THEN '🔴 Consider increasing to 128MB+ (25% of RAM)'
                 ELSE '🟢 Adequate'
-            END
+                END
         WHEN name = 'effective_cache_size' THEN '🟢 Usually auto-managed by Azure'
         WHEN name = 'work_mem' THEN
-            CASE 
+            CASE
                 WHEN setting::int < 4096 THEN '🟡 Consider increasing to 4MB+ for complex queries'
                 ELSE '🟢 Adequate'
-            END
+                END
         WHEN name = 'maintenance_work_mem' THEN
-            CASE 
+            CASE
                 WHEN setting::int < 65536 THEN '🟡 Consider increasing to 64MB+ for maintenance'
                 ELSE '🟢 Adequate'
-            END
-        -- Connection parameters  
+                END
+        -- Connection parameters
         WHEN name = 'max_connections' THEN
-            CASE 
+            CASE
                 WHEN setting::int > 200 THEN '🟡 High connection limit - consider connection pooling'
                 ELSE '🟢 Reasonable'
-            END
+                END
         -- Query planner parameters
         WHEN name = 'random_page_cost' THEN
-            CASE 
+            CASE
                 WHEN setting::numeric > 2.0 THEN '🟡 Consider lowering to 1.1 for SSD storage'
                 ELSE '🟢 Optimized for SSD'
-            END
+                END
         WHEN name = 'effective_io_concurrency' THEN
-            CASE 
-                WHEN setting::int < 100 THEN '🟡 Consider increasing to 200 for SSD storage'  
+            CASE
+                WHEN setting::int < 100 THEN '🟡 Consider increasing to 200 for SSD storage'
                 ELSE '🟢 Optimized for SSD'
-            END
+                END
+        WHEN name = 'checkpoint_completion_target' THEN
+            CASE
+                WHEN setting::numeric < 0.7 THEN '🟡 Consider increasing to 0.9 for better I/O distribution'
+                ELSE '🟢 Good'
+                END
+        WHEN name = 'wal_buffers' THEN
+            CASE
+                WHEN setting::int < 512 THEN '🟡 Consider increasing to 16MB for high write workloads'
+                ELSE '🟢 Adequate'
+                END
         ELSE '🟢 Standard'
-    END as recommendation
-FROM pg_settings 
+        END as recommendation
+FROM pg_settings
 WHERE name IN (
-    'shared_buffers', 
-    'effective_cache_size',
-    'work_mem', 
-    'maintenance_work_mem',
-    'max_connections',
-    'random_page_cost',
-    'effective_io_concurrency',
-    'checkpoint_completion_target',
-    'wal_buffers'
-)
+               'shared_buffers',
+               'effective_cache_size',
+               'work_mem',
+               'maintenance_work_mem',
+               'max_connections',
+               'random_page_cost',
+               'effective_io_concurrency',
+               'checkpoint_completion_target',
+               'wal_buffers'
+    )
 ORDER BY name;
 
 \echo ''
