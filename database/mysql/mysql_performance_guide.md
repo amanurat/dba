@@ -120,8 +120,8 @@ SHOW STATUS LIKE 'Innodb_buffer_pool_reads';
 -- คำนวณ Hit Ratio
 SELECT 
     ROUND(100 - (
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
+        (SELECT VARIABLE_VALUE FROM performance_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
+        (SELECT VARIABLE_VALUE FROM performance_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
     ), 2) AS buffer_pool_hit_ratio;
 ```
 
@@ -643,8 +643,8 @@ ANALYZE TABLE products;
 -- ดู Buffer Pool Hit Ratio หลังการปรับปรุง
 SELECT 
     ROUND(100 - (
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
+        (SELECT VARIABLE_VALUE FROM performance_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
+        (SELECT VARIABLE_VALUE FROM performance_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
     ), 2) AS buffer_pool_hit_ratio_after;
 ```
 
@@ -673,7 +673,7 @@ SET profiling = 1;
 
 -- ทดสอบ Query ที่เคยช้า
 SELECT * FROM orders WHERE status = 'pending';
-SELECT * FROM users ORDER BY created_at DESC LIMIT 10;
+SELECT * FROM customers ORDER BY registration_date DESC LIMIT 10;
 
 -- ดูผลการวัดเวลา
 SHOW PROFILES;

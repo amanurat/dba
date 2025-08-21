@@ -189,27 +189,31 @@ LIMIT 10;
 ## 🔍 9. ตรวจสอบ Buffer Pool Hit Ratio
 
 ```sql
--- คำนวณ Buffer Pool Hit Ratio
+-- Buffer Pool Monitoring
 SELECT 
     'Buffer Pool Hit Ratio' AS metric,
     CONCAT(
         ROUND(100 - (
-            (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
-            (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
+            (SELECT VARIABLE_VALUE 
+             FROM performance_schema.global_status 
+             WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
+            (SELECT VARIABLE_VALUE 
+             FROM performance_schema.global_status 
+             WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
         ), 2), '%'
     ) AS value,
     CASE 
         WHEN (100 - (
-            (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
-            (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
         )) > 99 THEN '🟢 Excellent'
         WHEN (100 - (
-            (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
-            (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
         )) > 95 THEN '🟢 Good'
         WHEN (100 - (
-            (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
-            (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
         )) > 90 THEN '🟡 Fair'
         ELSE '🔴 Poor'
     END AS status
@@ -218,21 +222,23 @@ UNION ALL
 
 SELECT 
     'Buffer Pool Size',
-    @@innodb_buffer_pool_size / 1024 / 1024 / 1024 AS value_gb,
-    'Current Setting'
+    ROUND(@@innodb_buffer_pool_size / 1024 / 1024 / 1024, 2),
+    'Current Setting (GB)'
 
 UNION ALL
 
 SELECT 
     'Buffer Pool Pages Total',
-    (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_pages_total'),
+    (SELECT VARIABLE_VALUE FROM performance_schema.global_status 
+     WHERE VARIABLE_NAME = 'Innodb_buffer_pool_pages_total'),
     'Total Pages'
 
 UNION ALL
 
 SELECT 
     'Buffer Pool Pages Free',
-    (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_pages_free'),
+    (SELECT VARIABLE_VALUE FROM performance_schema.global_status 
+     WHERE VARIABLE_NAME = 'Innodb_buffer_pool_pages_free'),
     'Free Pages';
 ```
 
@@ -242,33 +248,34 @@ SELECT
 
 ```sql
 -- ดูสถานะ Connection ปัจจุบัน
-SELECT 
+SELECT
     'Current Connections' AS metric,
-    (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Threads_connected') AS current_value,
-    (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'max_connections') AS max_allowed,
+    (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Threads_connected') AS current_value,
+    (SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'max_connections') AS max_allowed,
     ROUND(
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Threads_connected') /
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'max_connections') * 100, 2
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Threads_connected') /
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'max_connections') * 100, 2
     ) AS usage_percentage
 
 UNION ALL
 
-SELECT 
+SELECT
     'Max Used Connections',
-    (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Max_used_connections'),
-    (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'max_connections'),
+    (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Max_used_connections'),
+    (SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'max_connections'),
     ROUND(
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Max_used_connections') /
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_VARIABLES WHERE VARIABLE_NAME = 'max_connections') * 100, 2
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Max_used_connections') /
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'max_connections') * 100, 2
     )
 
 UNION ALL
 
-SELECT 
+SELECT
     'Threads Running',
-    (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Threads_running'),
+    (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Threads_running'),
     'N/A',
     'Active Queries';
+
 ```
 
 ---
@@ -298,33 +305,40 @@ ORDER BY TIME DESC;
 ## 🔍 12. ตรวจสอบ Deadlock และ Lock Wait
 
 ```sql
--- ดู Deadlock Statistics
-SELECT 
+-- ดู Deadlock & Lock Wait Statistics
+SELECT
     'Deadlocks' AS metric,
-    (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_deadlocks') AS total_count,
+    (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_deadlocks') AS total_count,
     'Since Server Start' AS period
 
 UNION ALL
 
-SELECT 
+SELECT
     'Lock Waits',
-    (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_row_lock_waits'),
+    (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_row_lock_waits'),
     'Total Row Lock Waits'
 
 UNION ALL
 
-SELECT 
+SELECT
     'Lock Wait Time (seconds)',
-    ROUND((SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_row_lock_time') / 1000, 2),
+    ROUND(
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_row_lock_time') / 1000,
+            2
+    ),
     'Total Time Spent Waiting'
 
 UNION ALL
 
-SELECT 
+SELECT
     'Average Lock Wait Time (ms)',
     ROUND(
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_row_lock_time') /
-        NULLIF((SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_row_lock_waits'), 0), 2
+            (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_row_lock_time') /
+            NULLIF(
+                    (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_row_lock_waits'),
+                    0
+            ),
+            2
     ),
     'Per Lock Wait';
 ```
