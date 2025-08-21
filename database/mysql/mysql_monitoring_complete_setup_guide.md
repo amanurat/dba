@@ -100,17 +100,16 @@ LIMIT 10;
 ### **🟢 Complete Parameter List**
 
 | **Priority** | **Parameter** | **Recommended Value** | **Notes** |
-|-------------|---------------|----------------------|-----------|
-| **1** | **performance_schema** | **ON** | **⚠️ Must restart server** |
-| **2** | performance_schema_max_table_instances | 12500 | Increase from default 12500 |
-| 3 | performance_schema_max_sql_text_length | 4096 | Capture longer SQL queries |
-| 4 | slow_query_log | ON | Enable slow query logging |
-| 5 | long_query_time | 1.0 | Log queries slower than 1 second |
-| 6 | log_queries_not_using_indexes | ON | Log queries without indexes |
-| 7 | log_slow_admin_statements | ON | Log slow admin statements |
-| 8 | log_slow_slave_statements | ON | Log slow replication statements |
-| 9 | innodb_monitor_enable | '%' | Enable all InnoDB monitors |
-| 10 | general_log | OFF | Keep disabled for performance |
+|--------------|---------------|----------------------|-----------|
+| **1**        | **performance_schema** | **ON** | **⚠️ Must restart server** |
+| 2            | performance_schema_max_sql_text_length | 4096 | Capture longer SQL queries |
+| 3            | slow_query_log | ON | Enable slow query logging |
+| 4            | long_query_time | 1.0 | Log queries slower than 1 second |
+| 5            | log_queries_not_using_indexes | ON | Log queries without indexes |
+| 6            | log_slow_admin_statements | ON | Log slow admin statements |
+| 7            | log_slow_slave_statements | ON | Log slow replication statements |
+| 8            | innodb_monitor_enable | '%' | Enable all InnoDB monitors |
+| 9            | general_log | OFF | Keep disabled for performance |
 
 ### **🔧 Production Setup Methods**
 
@@ -174,9 +173,6 @@ WHERE NAME LIKE 'wait/io/%';
 SHOW VARIABLES LIKE 'performance_schema';
 -- Expected: ON
 
-SHOW VARIABLES LIKE 'performance_schema_max_table_instances';
--- Expected: 12500
-
 SHOW VARIABLES LIKE 'slow_query_log';
 -- Expected: ON
 
@@ -190,7 +186,6 @@ SHOW VARIABLES LIKE 'log_queries_not_using_indexes';
 SELECT NAME, ENABLED 
 FROM performance_schema.setup_consumers 
 WHERE NAME IN (
-    'events_statements_summary_by_digest',
     'events_statements_history_long'
 );
 -- Expected: All should show ENABLED = YES
@@ -268,11 +263,18 @@ FROM performance_schema.events_statements_summary_by_digest
 UNION ALL
 
 SELECT
-    'Buffer Pool Hit Ratio (%)',
-    FORMAT(100 - (
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
-        (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
-    ), 2);
+    'Buffer Pool Hit Ratio (%)' AS metric,
+    FORMAT(
+            100 - (
+                (SELECT VARIABLE_VALUE
+                 FROM performance_schema.global_status
+                 WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads') * 100 /
+                (SELECT VARIABLE_VALUE
+                 FROM performance_schema.global_status
+                 WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests')
+                ),
+            2
+    ) AS value;
 -- Expected: Comprehensive statistics about your database workload
 ```
 
@@ -370,18 +372,44 @@ ORDER BY CURRENT_NUMBER_OF_BYTES_USED DESC
 LIMIT 10;
 -- Expected: Memory usage statistics by component
 
+-- Step 4: Memory usage analysis (Human readable)
+SELECT
+    EVENT_NAME AS component,
+    ROUND(CURRENT_NUMBER_OF_BYTES_USED / 1024 / 1024, 2) AS current_mb,
+    ROUND(HIGH_NUMBER_OF_BYTES_USED / 1024 / 1024, 2) AS high_mb,
+    ROUND(
+            (CURRENT_NUMBER_OF_BYTES_USED /
+             (SELECT SUM(CURRENT_NUMBER_OF_BYTES_USED)
+              FROM performance_schema.memory_summary_global_by_event_name)
+                ) * 100,
+            2) AS pct_of_total
+FROM performance_schema.memory_summary_global_by_event_name
+WHERE CURRENT_NUMBER_OF_BYTES_USED > 0
+ORDER BY CURRENT_NUMBER_OF_BYTES_USED DESC
+LIMIT 10;
+    
+
 -- Step 5: Table I/O statistics
-SELECT 
-    OBJECT_SCHEMA,
-    OBJECT_NAME,
-    COUNT_READ,
-    COUNT_WRITE,
-    SUM_TIMER_READ/1000000000000 as read_time_seconds,
-    SUM_TIMER_WRITE/1000000000000 as write_time_seconds
+SELECT
+    OBJECT_SCHEMA AS db_name,
+    OBJECT_NAME AS table_name,
+    COUNT_READ AS `read_ops`,
+        COUNT_WRITE AS `write_ops`,
+        ROUND(SUM_TIMER_READ/1e12, 2) AS read_time_sec,
+    ROUND(SUM_TIMER_WRITE/1e12, 2) AS write_time_sec,
+    ROUND((SUM_TIMER_READ + SUM_TIMER_WRITE)/1e12, 2) AS total_time_sec,
+    ROUND(
+            ( (SUM_TIMER_READ + SUM_TIMER_WRITE) /
+              (SELECT SUM(SUM_TIMER_READ + SUM_TIMER_WRITE)
+               FROM performance_schema.table_io_waits_summary_by_table
+               WHERE OBJECT_SCHEMA = DATABASE())
+                ) * 100,
+            2
+    ) AS pct_of_total
 FROM performance_schema.table_io_waits_summary_by_table
 WHERE OBJECT_SCHEMA = DATABASE()
-    AND (COUNT_READ > 0 OR COUNT_WRITE > 0)
-ORDER BY (SUM_TIMER_READ + SUM_TIMER_WRITE) DESC
+  AND (COUNT_READ > 0 OR COUNT_WRITE > 0)
+ORDER BY total_time_sec DESC
 LIMIT 10;
 -- Expected: I/O statistics for your database tables
 ```
@@ -425,8 +453,6 @@ SHOW VARIABLES LIKE 'performance_schema%';
 -- Should work after fix
 SHOW VARIABLES LIKE 'performance_schema';
 -- Expected: ON
-SELECT * FROM performance_schema.setup_consumers LIMIT 1;
--- Expected: Should return data without error
 ```
 
 #### **Issue 2: No Query Data in Performance Schema**
@@ -463,11 +489,6 @@ SELECT COUNT(*) FROM performance_schema.events_statements_summary_by_digest;
 UPDATE performance_schema.setup_consumers 
 SET ENABLED = 'YES' 
 WHERE NAME = 'events_statements_summary_by_digest';
-
--- Enable instruments
-UPDATE performance_schema.setup_instruments 
-SET ENABLED = 'YES', TIMED = 'YES'
-WHERE NAME LIKE 'statement/%';
 
 -- Generate test activity
 SELECT VERSION();
