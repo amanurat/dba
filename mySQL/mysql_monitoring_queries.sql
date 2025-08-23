@@ -118,7 +118,7 @@ LIMIT 15;
 -- ❌ UNUSED INDEXES: Potentially unused indexes
 SELECT 
     'Potentially Unused Indexes' as section;
-
+-- UNUSED INDEXES: Potentially unused indexes
 SELECT 
     OBJECT_NAME as table_name,
     INDEX_NAME as index_name,

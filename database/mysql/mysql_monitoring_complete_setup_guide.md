@@ -33,7 +33,7 @@
 | `slow_query_log` | `ON` |
 | `long_query_time` | `1.0` |
 | `log_queries_not_using_indexes` | `ON` |
-| `innodb_monitor_enable` | `'%'` |
+| `innodb_monitor_enable` | `ALL` |
 
 ### **⚡ Quick Setup Steps**
 
@@ -54,17 +54,12 @@ SHOW VARIABLES LIKE 'slow_query_log';
 SHOW VARIABLES LIKE 'long_query_time';
 -- Expected: slow_query_log = ON, long_query_time = 1.000000
 
--- Step 3: Test query tracking by enabling statement digest
-UPDATE performance_schema.setup_consumers 
-SET ENABLED = 'YES' 
-WHERE NAME = 'events_statements_summary_by_digest';
-
 -- Generate some test activity
 SELECT VERSION();
 SELECT DATABASE();
 SELECT COUNT(*) FROM information_schema.tables;
 
--- Step 4: Verify query stats are being collected
+-- Step 3: Verify query stats are being collected
 SELECT 
     LEFT(DIGEST_TEXT, 80) as query_preview,
     COUNT_STAR as execution_count,
@@ -141,29 +136,6 @@ LIMIT 10;
 az mysql flexible-server restart \
   --resource-group your-rg \
   --name your-server
-```
-
-**Step 5: Enable Performance Schema Consumers**
-```sql
--- After server restart, enable key consumers
-UPDATE performance_schema.setup_consumers 
-SET ENABLED = 'YES' 
-WHERE NAME IN (
-    'events_statements_summary_by_digest',
-    'events_statements_history_long',
-    'events_waits_summary_global_by_event_name',
-    'events_waits_summary_by_instance'
-);
-
--- Enable statement instrumentation
-UPDATE performance_schema.setup_instruments 
-SET ENABLED = 'YES', TIMED = 'YES'
-WHERE NAME LIKE 'statement/%';
-
--- Enable wait instrumentation  
-UPDATE performance_schema.setup_instruments 
-SET ENABLED = 'YES', TIMED = 'YES'
-WHERE NAME LIKE 'wait/io/%';
 ```
 
 ### **🧪 Post-Setup Verification (Production)**

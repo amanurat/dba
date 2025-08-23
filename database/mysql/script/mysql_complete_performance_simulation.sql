@@ -7,15 +7,6 @@
 -- 1. SETUP: Enable Performance Schema & Monitoring
 -- ========================================
 
--- Enable Performance Schema components
-UPDATE performance_schema.setup_instruments 
-SET ENABLED = 'YES', TIMED = 'YES' 
-WHERE NAME LIKE '%statement/%' OR NAME LIKE '%table/%';
-
-UPDATE performance_schema.setup_consumers 
-SET ENABLED = 'YES' 
-WHERE NAME LIKE '%events_statements_%' OR NAME LIKE '%table_io%';
-
 -- Create table to store test results
 DROP TABLE IF EXISTS performance_baseline;
 CREATE TABLE performance_baseline (
@@ -517,7 +508,7 @@ SELECT CONCAT('Cache hit ratio: ', @cache_ratio, '%') as cache_result;
 SELECT 
     '📊 BEFORE OPTIMIZATION RESULTS' as title,
     '════════════════════════════════════════════════════════════════════' as separator;
-
+-- BEFORE OPTIMIZATION RESULTS
 SELECT 
     test_name,
     CONCAT(execution_time_ms, ' ms') as execution_time,
@@ -555,18 +546,18 @@ LIMIT 1;
 SELECT '⚡ APPLYING OPTIMIZATIONS...' as status;
 
 -- Remove bad indexes first
-DROP INDEX IF EXISTS idx_customers_unused1 ON customers;
-DROP INDEX IF EXISTS idx_customers_unused2 ON customers;
-DROP INDEX IF EXISTS idx_products_unused ON products;
-DROP INDEX IF EXISTS idx_orders_unused ON orders;
-DROP INDEX IF EXISTS idx_orders_wrong_order ON orders;
+DROP INDEX idx_customers_unused1 ON customers;
+DROP INDEX idx_customers_unused2 ON customers;
+DROP INDEX idx_products_unused ON products;
+DROP INDEX idx_orders_unused ON orders;
+DROP INDEX idx_orders_wrong_order ON orders;
 
 -- Remove temporary foreign key indexes
-DROP INDEX IF EXISTS fk_customer_temp ON orders;
-DROP INDEX IF EXISTS fk_order_temp ON order_items;
-DROP INDEX IF EXISTS fk_product_temp ON order_items;
-DROP INDEX IF EXISTS fk_product_review_temp ON reviews;
-DROP INDEX IF EXISTS fk_customer_review_temp ON reviews;
+DROP INDEX fk_customer_temp ON orders;
+DROP INDEX fk_order_temp ON order_items;
+DROP INDEX fk_product_temp ON order_items;
+DROP INDEX fk_product_review_temp ON reviews;
+DROP INDEX fk_customer_review_temp ON reviews;
 
 -- Create optimized indexes
 -- For single column queries
@@ -739,40 +730,73 @@ SELECT
     '════════════════════════════════════════════════════════════════════════════════' as separator;
 
 -- Detailed before/after comparison
-SELECT 
+SELECT
     pb1.test_name as "Test Case",
     CONCAT(COALESCE(pb1.before_ms, 0), ' ms') as "Before",
-    CONCAT(COALESCE(pb1.after_ms, 0), ' ms') as "After", 
-    CASE 
-        WHEN pb1.before_ms > 0 AND pb1.after_ms > 0 THEN 
-            CONCAT(ROUND(pb1.before_ms / pb1.after_ms, 1), 'x faster')
-        ELSE 'N/A'
-    END as "Improvement",
-    CASE 
+    CONCAT(COALESCE(pb1.after_ms, 0), ' ms') as "After",
+
+    -- Improvement (x faster / slower)
+    CASE
         WHEN pb1.before_ms > 0 AND pb1.after_ms > 0 THEN
-            CONCAT(ROUND(((pb1.before_ms - pb1.after_ms) / pb1.before_ms) * 100, 1), '% faster')
+            CONCAT(
+                    ROUND(
+                            CASE
+                                WHEN pb1.after_ms < pb1.before_ms
+                                    THEN pb1.before_ms / pb1.after_ms
+                                ELSE pb1.after_ms / pb1.before_ms
+                                END,
+                            1),
+                    CASE
+                        WHEN pb1.after_ms < pb1.before_ms THEN 'x faster'
+                        ELSE 'x slower'
+                        END
+            )
         ELSE 'N/A'
-    END as "% Improvement",
-    CASE 
+        END as "Improvement",
+
+    -- % Improvement (positive number + faster/slower)
+    CASE
+        WHEN pb1.before_ms > 0 AND pb1.after_ms > 0 THEN
+            CONCAT(
+                    ROUND(
+                            ABS((pb1.before_ms - pb1.after_ms) / pb1.before_ms * 100),
+                            1
+                    ),
+                    CASE
+                        WHEN pb1.after_ms < pb1.before_ms THEN '% faster'
+                        ELSE '% slower'
+                        END
+            )
+        ELSE 'N/A'
+        END as "% Improvement",
+
+    -- Final Status (ตาม absolute time หลังปรับปรุง)
+    CASE
         WHEN COALESCE(pb1.after_ms, 0) < 50 THEN '🟢 Excellent'
         WHEN COALESCE(pb1.after_ms, 0) < 200 THEN '🟢 Good'
         WHEN COALESCE(pb1.after_ms, 0) < 1000 THEN '🟡 OK'
         ELSE '🔴 Needs Work'
-    END as "Final Status"
+        END as "Final Status"
+
 FROM (
-    SELECT 
-        test_name,
-        MAX(CASE WHEN test_phase = 'BEFORE' THEN execution_time_ms END) as before_ms,
-        MAX(CASE WHEN test_phase = 'AFTER' THEN execution_time_ms END) as after_ms,
-        MAX(CASE WHEN test_phase = 'BEFORE' THEN cache_hit_ratio END) as cache_before,
-        MAX(CASE WHEN test_phase = 'AFTER' THEN cache_hit_ratio END) as cache_after
-    FROM performance_baseline
-    WHERE execution_time_ms IS NOT NULL OR cache_hit_ratio IS NOT NULL
-    GROUP BY test_name
-) pb1
+         SELECT
+             test_name,
+             MAX(CASE WHEN test_phase = 'BEFORE' THEN execution_time_ms END) as before_ms,
+             MAX(CASE WHEN test_phase = 'AFTER' THEN execution_time_ms END) as after_ms,
+             MAX(CASE WHEN test_phase = 'BEFORE' THEN cache_hit_ratio END) as cache_before,
+             MAX(CASE WHEN test_phase = 'AFTER' THEN cache_hit_ratio END) as cache_after
+         FROM performance_baseline
+         WHERE execution_time_ms IS NOT NULL OR cache_hit_ratio IS NOT NULL
+         GROUP BY test_name
+     ) pb1
 WHERE pb1.before_ms IS NOT NULL AND pb1.after_ms IS NOT NULL
-ORDER BY 
-    CASE WHEN pb1.before_ms > 0 AND pb1.after_ms > 0 THEN pb1.before_ms / pb1.after_ms ELSE 0 END DESC;
+ORDER BY
+    CASE
+        WHEN pb1.before_ms > 0 AND pb1.after_ms > 0
+            THEN pb1.before_ms / pb1.after_ms
+        ELSE 0
+        END DESC;
+
 
 -- Cache performance comparison
 SELECT 
@@ -798,83 +822,83 @@ FROM (
 ) cache_comparison;
 
 -- Summary statistics
-SELECT 
-    '📈 OVERALL SUMMARY' as metric_type,
-    '─────────────────────────────────────────────────────────────────' as separator
-UNION ALL
-SELECT 
-    'Average Performance' as metric_type,
-    CONCAT(
-        ROUND(avg_before, 1), ' ms → ', ROUND(avg_after, 1), ' ms (',
-        ROUND(avg_before / NULLIF(avg_after, 0), 1), 'x faster overall)'
-    ) as summary
-FROM (
-    SELECT 
-        AVG(CASE WHEN test_phase = 'BEFORE' THEN execution_time_ms END) as avg_before,
-        AVG(CASE WHEN test_phase = 'AFTER' THEN execution_time_ms END) as avg_after,
-        MAX(CASE WHEN test_phase = 'BEFORE' THEN execution_time_ms END) as max_before,
-        MAX(CASE WHEN test_phase = 'AFTER' THEN execution_time_ms END) as max_after
+WITH summary_stats AS (
+    SELECT
+        AVG(CASE WHEN test_phase = 'BEFORE' THEN execution_time_ms END) AS avg_before,
+        AVG(CASE WHEN test_phase = 'AFTER'  THEN execution_time_ms END) AS avg_after,
+        MAX(CASE WHEN test_phase = 'BEFORE' THEN execution_time_ms END) AS max_before,
+        MAX(CASE WHEN test_phase = 'AFTER'  THEN execution_time_ms END) AS max_after
     FROM performance_baseline
     WHERE execution_time_ms IS NOT NULL
-) summary_stats
+)
+SELECT
+    '📈 OVERALL SUMMARY' AS metric_type,
+    '─────────────────────────────────────────────────────────────────' AS summary
+
 UNION ALL
-SELECT 
-    'Worst Case Performance' as metric_type,
+
+SELECT
+    'Average Performance',
     CONCAT(
-        ROUND(max_before, 1), ' ms → ', ROUND(max_after, 1), ' ms (',
-        ROUND(max_before / NULLIF(max_after, 0), 1), 'x improvement)'
-    ) as summary
-FROM (
-    SELECT 
-        AVG(CASE WHEN test_phase = 'BEFORE' THEN execution_time_ms END) as avg_before,
-        AVG(CASE WHEN test_phase = 'AFTER' THEN execution_time_ms END) as avg_after,
-        MAX(CASE WHEN test_phase = 'BEFORE' THEN execution_time_ms END) as max_before,
-        MAX(CASE WHEN test_phase = 'AFTER' THEN execution_time_ms END) as max_after
-    FROM performance_baseline
-    WHERE execution_time_ms IS NOT NULL
-) summary_stats;
+            ROUND(avg_before, 1), ' ms → ', ROUND(avg_after, 1), ' ms (',
+            ROUND(
+                    CASE WHEN avg_after < avg_before
+                             THEN avg_before / NULLIF(avg_after, 0)
+                         ELSE avg_after / NULLIF(avg_before, 0)
+                        END, 1
+            ),
+            CASE WHEN avg_after < avg_before THEN 'x faster overall)' ELSE 'x slower overall)' END
+    )
+FROM summary_stats
+
+UNION ALL
+
+SELECT
+    'Worst Case Performance',
+    CONCAT(
+            ROUND(max_before, 1), ' ms → ', ROUND(max_after, 1), ' ms (',
+            ROUND(
+                    CASE WHEN max_after < max_before
+                             THEN max_before / NULLIF(max_after, 0)
+                         ELSE max_after / NULLIF(max_before, 0)
+                        END, 1
+            ),
+            CASE WHEN max_after < max_before THEN 'x faster)' ELSE 'x slower)' END
+    )
+FROM summary_stats;
+
 
 -- ========================================
 -- 11. INDEX USAGE ANALYSIS
 -- ========================================
-
-SELECT 
-    '📊 INDEX USAGE ANALYSIS' as title,
-    '═══════════════════════════════════════════════════════════════════' as separator;
-
 -- Show which new indexes are being used (MySQL equivalent)
-SELECT 
-    OBJECT_SCHEMA as schema_name,
-    OBJECT_NAME as table_name,
-    INDEX_NAME as index_name,
-    COUNT_FETCH as times_used,
-    SUM_TIMER_FETCH / 1000000000000 as total_fetch_time_sec,
-    ROUND(
-        (SELECT ((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024) 
-         FROM information_schema.TABLES t 
-         WHERE t.TABLE_SCHEMA = tio.OBJECT_SCHEMA 
-           AND t.TABLE_NAME = tio.OBJECT_NAME), 2
-    ) as table_size_mb,
-    CASE 
-        WHEN COUNT_FETCH = 0 THEN '🔴 Not Used'
-        WHEN COUNT_FETCH < 10 THEN '🟡 Low Usage'
-        WHEN COUNT_FETCH < 100 THEN '🟢 Good Usage'
+SELECT
+    tio.OBJECT_SCHEMA AS schema_name,
+    tio.OBJECT_NAME  AS table_name,
+    tio.INDEX_NAME   AS index_name,
+    tio.COUNT_FETCH  AS times_used,  -- จำนวนครั้งที่ index ถูกใช้ดึงข้อมูล (fetch)
+    ROUND(tio.SUM_TIMER_FETCH / 1e12, 2) AS total_fetch_time_sec, -- เวลารวมที่ใช้ในการ fetch index
+    ROUND((t.DATA_LENGTH + t.INDEX_LENGTH) / 1024 / 1024, 2) AS table_size_mb, -- ขนาดตาราง (MB)
+    CASE
+        WHEN tio.COUNT_FETCH = 0 THEN '🔴 Not Used'
+        WHEN tio.COUNT_FETCH < 10 THEN '🟡 Low Usage'
+        WHEN tio.COUNT_FETCH < 100 THEN '🟢 Good Usage'
         ELSE '🟢 High Usage'
-    END as usage_status
+        END AS usage_status
 FROM performance_schema.table_io_waits_summary_by_index_usage tio
-WHERE OBJECT_SCHEMA = DATABASE()
-    AND INDEX_NAME LIKE '%_opt'
-    AND INDEX_NAME IS NOT NULL
-ORDER BY COUNT_FETCH DESC;
+         JOIN information_schema.TABLES t
+              ON t.TABLE_SCHEMA = tio.OBJECT_SCHEMA
+                  AND t.TABLE_NAME   = tio.OBJECT_NAME
+WHERE
+    tio.OBJECT_SCHEMA = DATABASE()      -- เลือกเฉพาะ index ของ database ปัจจุบัน
+  AND tio.INDEX_NAME IS NOT NULL      -- ตัด index ที่ไม่มีชื่อออก (NULL = ไม่ใช่ index ปกติ)
+  AND tio.INDEX_NAME LIKE '%_opt'     -- เลือกเฉพาะ index ที่ตั้งชื่อมีคำว่า "_opt" (สมมติสร้างเพื่อ optimization)
+ORDER BY tio.COUNT_FETCH DESC;          -- จัดลำดับจาก index ที่ถูกใช้งานมากที่สุด → น้อยที่สุด
+
 
 -- ========================================
 -- 12. FINAL RECOMMENDATIONS
 -- ========================================
-
-SELECT 
-    '💡 OPTIMIZATION RECOMMENDATIONS' as title,
-    '═══════════════════════════════════════════════════════════════════' as separator;
-
 SELECT 
     'Tests Performed: ' || COUNT(*) as metric,
     '' as value
