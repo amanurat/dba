@@ -8,11 +8,11 @@
 # =============================================================================
 
 # Your Azure MySQL server details
-AZURE_MYSQL_HOST="YOUR_SERVER_NAME.mysql.database.azure.com"
+AZURE_MYSQL_HOST="myus.mysql.database.azure.com"
 AZURE_MYSQL_PORT="3306"
-AZURE_MYSQL_USERNAME="pmm_monitor@YOUR_SERVER_NAME"
+AZURE_MYSQL_USERNAME="pmm_monitor"
 AZURE_MYSQL_PASSWORD="admin"
-SERVICE_NAME="azure-mysql-production"
+SERVICE_NAME="my-azure-mysql"
 
 # PMM Server details (usually don't need to change)
 PMM_SERVER_URL="https://admin:admin@localhost:443"
@@ -44,11 +44,8 @@ check_variables() {
 test_mysql_connection() {
     echo -e "${YELLOW}Step 1: Testing MySQL connection...${NC}"
     
-    # Extract server name from host for username
-    SERVER_NAME=$(echo "$AZURE_MYSQL_HOST" | cut -d'.' -f1)
-    
-    # Test connection
-    if mysql -h "$AZURE_MYSQL_HOST" -P "$AZURE_MYSQL_PORT" -u "$AZURE_MYSQL_USERNAME" -p"$AZURE_MYSQL_PASSWORD" -e "SELECT 'Connection successful' as Status, VERSION() as Version;" 2>/dev/null; then
+    # Test connection (username is already set correctly)
+    if mysql -h "$AZURE_MYSQL_HOST" -P "$AZURE_MYSQL_PORT" -u "$AZURE_MYSQL_USERNAME" -p"$AZURE_MYSQL_PASSWORD" --ssl-mode=REQUIRED -e "SELECT 'Connection successful' as Status, VERSION() as Version;" 2>/dev/null; then
         echo -e "${GREEN}✓ MySQL connection successful!${NC}"
         return 0
     else
@@ -92,7 +89,7 @@ add_mysql_to_pmm() {
         --host="$AZURE_MYSQL_HOST" \
         --port="$AZURE_MYSQL_PORT" \
         --query-source=perfschema \
-        --disable-ssl
+        --tls
         
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ MySQL service added to PMM successfully!${NC}"
@@ -159,6 +156,6 @@ main
 #
 # 4. SSL/TLS issues:
 #    - Azure MySQL typically requires SSL
-#    - Remove --disable-ssl if you have SSL configured
+#    - Remove --tls if you have SSL configured
 #
 # =============================================================================

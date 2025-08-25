@@ -136,7 +136,6 @@ WHERE t.TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema'
     )
 ORDER BY t.TABLE_ROWS DESC;
 ```
-
 📌 Table ที่ไม่มี index แต่มีข้อมูลเยอะอาจต้องสร้าง index
 
 ---
@@ -160,7 +159,6 @@ WHERE OBJECT_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema',
     AND (COUNT_READ + COUNT_WRITE + COUNT_FETCH) = 0  -- ไม่ได้ใช้เลย
 ORDER BY OBJECT_NAME, INDEX_NAME;
 ```
-
 📌 แสดงเพื่อช่วย DBA ทำ index cleanup
 
 ---
@@ -394,6 +392,34 @@ WHERE DIGEST_TEXT IS NOT NULL
     AND COUNT_STAR > 5
 GROUP BY 1
 ORDER BY total_impact_seconds DESC;
+
+-- เจาะลึก Query ที่ถูกจัดอยู่ใน Other group
+SELECT
+    DIGEST_TEXT AS sample_query,
+    COUNT_STAR AS exec_count,  -- จำนวนครั้งที่รัน
+    ROUND(SUM_TIMER_WAIT/1e12, 2) AS total_exec_time_sec, -- เวลารวมทั้งหมด
+    ROUND(AVG_TIMER_WAIT/1e12, 6) AS avg_exec_time_sec,   -- เวลาเฉลี่ยต่อครั้ง
+    ROUND((SUM_TIMER_WAIT /
+           (SELECT SUM(SUM_TIMER_WAIT)
+            FROM performance_schema.events_statements_summary_by_digest) * 100), 2) AS pct_of_total_time
+FROM performance_schema.events_statements_summary_by_digest
+WHERE DIGEST_TEXT IS NOT NULL
+  AND DIGEST_TEXT NOT LIKE '%performance_schema%'
+  AND DIGEST_TEXT NOT LIKE '%information_schema%'
+  AND COUNT_STAR > 5
+  AND (
+    DIGEST_TEXT NOT LIKE '%WHERE%AND%'
+        AND DIGEST_TEXT NOT LIKE '%ORDER BY%'
+        AND DIGEST_TEXT NOT LIKE '%GROUP BY%'
+        AND DIGEST_TEXT NOT LIKE '%JOIN%ON%'
+        AND DIGEST_TEXT NOT LIKE '%WHERE%LIKE%'
+        AND DIGEST_TEXT NOT LIKE '%MATCH%AGAINST%'
+        AND DIGEST_TEXT NOT LIKE '%WHERE%'
+    )
+ORDER BY total_exec_time_sec DESC
+LIMIT 10;
+
+
 ```
 
 ---
