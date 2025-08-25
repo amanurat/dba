@@ -797,16 +797,17 @@ FROM index_suggestions;
 \echo '-- UNUSED INDEX REMOVAL (Review carefully before executing):'
 
 -- Generate index removal scripts for unused indexes
-SELECT 
-    '-- DROP INDEX ' || schemaname || '.' || indexrelname || ';' as drop_statement,
-    '-- Saves: ' || pg_size_pretty(pg_relation_size(indexrelid)) || ' disk space' as space_savings
+SELECT
+    '-- DROP INDEX CONCURRENTLY IF EXISTS ' || quote_ident(schemaname) || '.' || quote_ident(indexrelname) || ';' AS drop_statement,
+    '-- Saves: ' || pg_size_pretty(pg_relation_size(psi.indexrelid)) || ' disk space' AS space_savings
 FROM pg_stat_user_indexes psi
-JOIN pg_index pi ON psi.indexrelid = pi.indexrelid
-WHERE idx_scan = 0
-    AND NOT pi.indisunique  
-    AND NOT pi.indisprimary
-ORDER BY pg_relation_size(indexrelid) DESC
+         JOIN pg_index pi ON psi.indexrelid = pi.indexrelid
+WHERE psi.idx_scan = 0
+  AND NOT pi.indisunique
+  AND NOT pi.indisprimary
+ORDER BY pg_relation_size(psi.indexrelid) DESC
 LIMIT 5;
+
 
 \echo ''
 \echo '>>> STEP 10 RECOMMENDATIONS GENERATED'
