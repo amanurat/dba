@@ -433,8 +433,8 @@ SELECT capture_cache_metrics('Overall Cache Performance', 'BEFORE');
 SELECT 
     '📊 BEFORE OPTIMIZATION RESULTS' as title,
     '════════════════════════════════════════════════════════════════════' as separator;
-
-SELECT 
+-- BEFORE OPTIMIZATION RESULTS
+SELECT
     test_name,
     execution_time_ms || ' ms' as execution_time,
     CASE 
@@ -445,7 +445,8 @@ SELECT
     END as performance_status,
     rows_examined as rows_examined
 FROM performance_baseline 
-WHERE test_phase = 'BEFORE' 
+-- WHERE test_phase = 'BEFORE'
+WHERE test_phase = 'AFTER'
     AND execution_time_ms IS NOT NULL
 ORDER BY execution_time_ms DESC;
 
@@ -733,7 +734,7 @@ ORDER BY idx_scan DESC;
 SELECT 
     '💡 OPTIMIZATION RECOMMENDATIONS' as title,
     '═══════════════════════════════════════════════════════════════════' as separator;
-
+-- OPTIMIZATION RECOMMENDATIONS
 WITH optimization_summary AS (
     SELECT 
         COUNT(*) as total_tests,
