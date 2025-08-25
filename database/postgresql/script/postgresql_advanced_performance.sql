@@ -44,20 +44,20 @@ WHERE relname = 'orders';
 
 -- 1.3 VACUUM แบบต่างๆ และการวัดผล
 
--- VACUUM ธรรมดา (ทำความสะอาด dead tuples แต่ไม่คืน space ให้ OS)
+
 \timing on
 VACUUM orders;
 \timing off
 
 -- ตรวจสอบผลหลัง VACUUM
-SELECT 
-    tablename,
+SELECT
+    relname AS tablename,
     n_live_tup,
     n_dead_tup,
     ROUND(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 2) as dead_ratio,
     pg_size_pretty(pg_total_relation_size('orders')) as total_size
 FROM pg_stat_user_tables 
-WHERE tablename = 'orders';
+WHERE relname = 'orders';
 
 -- VACUUM FULL (คืน space ให้ OS แต่ต้อง exclusive lock)
 -- ระวัง: ใช้เฉพาะเวลาที่ไม่มี user เท่านั้น!
@@ -140,17 +140,21 @@ UPDATE orders SET status =
     END
 WHERE id <= 20000;
 
+select status
+from orders where id <= 20000;
+
 -- 2.3 REINDEX Examples
 -- REINDEX แบบ CONCURRENTLY (ไม่ lock table)
 REINDEX INDEX CONCURRENTLY idx_test_bloat;
 
 -- ตรวจสอบผลหลัง REINDEX
-SELECT 
-    indexname,
-    pg_size_pretty(pg_relation_size(indexrelid)) as size_after_reindex,
+SELECT
+    indexrelname AS index_name,
+    pg_size_pretty(pg_relation_size(indexrelid)) AS size_after_reindex,
     idx_scan
-FROM pg_stat_user_indexes 
-WHERE indexname = 'idx_test_bloat';
+FROM pg_stat_user_indexes
+WHERE indexrelname = 'idx_test_bloat';
+
 
 -- REINDEX ทั้ง table (ใช้เวลานาน)
 -- REINDEX TABLE CONCURRENTLY orders;
@@ -381,26 +385,25 @@ LIMIT 10;
 SELECT 
     '⚙️ CONFIGURATION ANALYSIS' as title,
     '─────────────────────────────────────' as separator;
-
 -- Memory Settings
 SELECT
     'Memory Configuration' AS category,
     name,
-    setting || COALESCE(' ' || unit, '') AS current_value,
+    setting || ' ' || unit AS current_value,
     short_desc,
     CASE name
         WHEN 'shared_buffers' THEN
             CASE
-                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 256*1024*1024 THEN '🔴 Too Low (< 256MB)'
-                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 512*1024*1024 THEN '🟡 Low (< 512MB)'
-                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 2*1024*1024*1024 THEN '🟢 Good (512MB-2GB)'
+                WHEN pg_size_bytes(setting || unit) < 256::BIGINT*1024*1024 THEN '🔴 Too Low (< 256MB)'
+                WHEN pg_size_bytes(setting || unit) < 512::BIGINT*1024*1024 THEN '🟡 Low (< 512MB)'
+                WHEN pg_size_bytes(setting || unit) < 2::BIGINT*1024*1024*1024 THEN '🟢 Good (512MB-2GB)'
                 ELSE '🟢 Excellent (> 2GB)'
                 END
         WHEN 'work_mem' THEN
             CASE
-                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 4*1024*1024 THEN '🔴 Too Low (< 4MB)'
-                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 16*1024*1024 THEN '🟡 Low (< 16MB)'
-                WHEN pg_size_bytes(setting || COALESCE(unit, 'B')) < 64*1024*1024 THEN '🟢 Good (16-64MB)'
+                WHEN pg_size_bytes(setting || unit) < 4::BIGINT*1024*1024 THEN '🔴 Too Low (< 4MB)'
+                WHEN pg_size_bytes(setting || unit) < 16::BIGINT*1024*1024 THEN '🟡 Low (< 16MB)'
+                WHEN pg_size_bytes(setting || unit) < 64::BIGINT*1024*1024 THEN '🟢 Good (16-64MB)'
                 ELSE '🟠 High (> 64MB - check max_connections)'
                 END
         ELSE '⚪ Manual Review'
@@ -408,6 +411,8 @@ SELECT
 FROM pg_settings
 WHERE name IN ('shared_buffers', 'work_mem', 'effective_cache_size', 'maintenance_work_mem')
 ORDER BY name;
+
+
 
 -- 6.1 Current Configuration Analysis
 SELECT
@@ -612,6 +617,50 @@ SELECT
             '🟢 Database size is manageable (' || pg_size_pretty(db_size) || ')'
     END as suggestion
 FROM system_stats;
+
+WITH system_stats AS (
+    SELECT
+        pg_database_size(current_database()) AS db_size,
+        (SELECT count(*) FROM pg_stat_activity WHERE state = 'active') AS active_connections,
+        (SELECT ROUND(100.0 * sum(heap_blks_hit) / NULLIF(sum(heap_blks_hit) + sum(heap_blks_read), 0), 2)
+         FROM pg_statio_user_tables) AS cache_hit_ratio
+)
+SELECT
+    '🎯 TUNING RECOMMENDATIONS' AS title,
+    '─────────────────────────────────────────' AS separator
+UNION ALL
+SELECT
+    '1. Memory Tuning' AS recommendation_type,
+    CASE
+        WHEN cache_hit_ratio < 95 THEN
+            '🔴 Increase shared_buffers (current cache hit: ' || cache_hit_ratio || '%)'
+        ELSE
+            '🟢 Memory configuration looks good (cache hit: ' || cache_hit_ratio || '%)'
+        END AS suggestion
+FROM system_stats
+UNION ALL
+SELECT
+    '2. Connection Management' AS recommendation_type,
+    CASE
+        WHEN active_connections > 50 THEN
+            '🟡 Consider connection pooling (' || active_connections || ' active connections)'
+        ELSE
+            '🟢 Connection count is reasonable (' || active_connections || ' active)'
+        END AS suggestion
+FROM system_stats
+UNION ALL
+SELECT
+    '3. Database Size' AS recommendation_type,
+    CASE
+        WHEN db_size > 20::BIGINT*1024*1024*1024 THEN  -- > 20GB
+            '🟠 Large database - consider partitioning (' || pg_size_pretty(db_size) || ')'
+        WHEN db_size > 5::BIGINT*1024*1024*1024 THEN   -- > 5GB
+            '🟡 Medium database - monitor growth (' || pg_size_pretty(db_size) || ')'
+        ELSE
+            '🟢 Database size is manageable (' || pg_size_pretty(db_size) || ')'
+        END AS suggestion
+FROM system_stats;
+
 
 -- ========================================
 -- 7. MAINTENANCE SCHEDULER
