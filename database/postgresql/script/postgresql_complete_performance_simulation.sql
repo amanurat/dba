@@ -98,7 +98,7 @@ CREATE TABLE order_items (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Reviews table
+-- Reviews table (for JOIN performance testing)
 DROP TABLE IF EXISTS reviews CASCADE;
 CREATE TABLE reviews (
     id SERIAL PRIMARY KEY,
@@ -179,7 +179,7 @@ SELECT
     ROUND(random() * 30 + 5) || 'x' || ROUND(random() * 20 + 3) || 'x' || ROUND(random() * 10 + 1) || 'cm'
 FROM generate_series(1, 10000) AS i;
 
--- Insert orders (200,000 records)
+-- Insert orders (200,000 records - this will create performance challenges)
 INSERT INTO orders (customer_id, order_date, status, total_amount, shipping_address, shipping_method, payment_method, notes, processed_at, shipped_at, delivered_at, created_at)
 SELECT 
     (random() * 49999 + 1)::integer,
@@ -225,7 +225,8 @@ CROSS JOIN LATERAL (
     SELECT generate_series(1, (random() * 4 + 1)::integer)
 ) AS series;
 
--- Insert reviews (safe method)
+-- Insert reviews (ประมาณ 80,000-100,000 records)
+-- ใช้วิธี safe insert กับ ON CONFLICT เพื่อหลีกเลี่ยง duplicate
 WITH review_candidates AS (
     SELECT 
         p.id as product_id,
@@ -251,8 +252,8 @@ WITH review_candidates AS (
 INSERT INTO reviews (product_id, customer_id, rating, review_text, is_verified, created_at)
 SELECT 
     product_id, customer_id, rating, review_text, is_verified, created_at
-FROM review_candidates 
-WHERE rn = 1
+FROM review_candidates
+WHERE rn = 1  -- เฉพาะ record แรกต่อ combination เพื่อหลีกเลี่ยง duplicate
 LIMIT 100000
 ON CONFLICT (product_id, customer_id) DO NOTHING;
 
@@ -263,11 +264,13 @@ ANALYZE customers, products, orders, order_items, reviews;
 -- 4. CREATE BAD INDEXES (จำลองปัญหา)
 -- ========================================
 
--- สร้าง indexes ที่ไม่ดีเพื่อจำลองปัญหา
+-- สร้าง indexes ที่ไม่ดีเพื่อจำลองปัญหา (Create some unnecessary indexes that waste space)
 CREATE INDEX idx_customers_unused1 ON customers (phone);    -- Rarely queried
 CREATE INDEX idx_customers_unused2 ON customers (address);  -- Text field, inefficient
 CREATE INDEX idx_products_unused ON products (weight);  -- Rarely queried
 CREATE INDEX idx_orders_unused ON orders (notes);   -- Text field, rarely queried
+
+-- Create a composite index in wrong order
 CREATE INDEX idx_orders_wrong_order ON orders (total_amount, status); -- Wrong order for typical queries
 
 -- ========================================
@@ -292,20 +295,20 @@ DECLARE
 BEGIN
     -- บันทึกเวลาเริ่มต้น
     start_time := clock_timestamp();
-    
+
     -- รัน query และนับ rows
     EXECUTE 'SELECT count(*) FROM (' || query_text || ') as subquery' INTO rows_count;
-    
+
     -- บันทึกเวลาสิ้นสุด
     end_time := clock_timestamp();
-    
+
     -- คำนวณเวลาที่ใช้
     exec_time := ROUND(EXTRACT(EPOCH FROM (end_time - start_time)) * 1000, 2);
-    
+
     -- บันทึกลงตาราง baseline
     INSERT INTO performance_baseline (test_name, test_phase, execution_time_ms, rows_examined, test_timestamp)
     VALUES (test_name_param, test_phase_param, exec_time, rows_count, NOW());
-    
+
     -- ส่งค่ากลับ
     execution_time_ms := exec_time;
     rows_returned := rows_count;
@@ -315,7 +318,7 @@ $$ LANGUAGE plpgsql;
 
 -- ฟังก์ชันจับ cache hit ratio
 CREATE OR REPLACE FUNCTION capture_cache_metrics(
-    test_name_param VARCHAR(100), 
+    test_name_param VARCHAR(100),
     test_phase_param VARCHAR(20)
 ) RETURNS NUMERIC AS $$
 DECLARE
@@ -324,11 +327,11 @@ BEGIN
     SELECT ROUND(100.0 * sum(heap_blks_hit) / NULLIF(sum(heap_blks_hit) + sum(heap_blks_read), 0), 2)
     INTO cache_hit_ratio
     FROM pg_statio_user_tables;
-    
+
     -- บันทึกลงตาราง baseline
     INSERT INTO performance_baseline (test_name, test_phase, cache_hit_ratio, test_timestamp)
     VALUES (test_name_param, test_phase_param, cache_hit_ratio, NOW());
-    
+
     RETURN cache_hit_ratio;
 END;
 $$ LANGUAGE plpgsql;
@@ -492,21 +495,21 @@ CREATE INDEX CONCURRENTLY idx_order_items_product_id_opt ON order_items (product
 CREATE INDEX CONCURRENTLY idx_reviews_product_id_opt ON reviews (product_id);
 
 -- Covering indexes (include commonly selected columns)
-CREATE INDEX CONCURRENTLY idx_orders_status_covering_opt ON orders (status) 
+CREATE INDEX CONCURRENTLY idx_orders_status_covering_opt ON orders (status)
     INCLUDE (id, customer_id, order_date, total_amount);
 
 CREATE INDEX CONCURRENTLY idx_customers_city_covering_opt ON customers (city)
     INCLUDE (id, first_name, last_name, registration_date);
 
 -- Partial indexes (for active/common data only)
-CREATE INDEX CONCURRENTLY idx_products_category_active_opt ON products (category) 
+CREATE INDEX CONCURRENTLY idx_products_category_active_opt ON products (category)
     WHERE is_active = true;
 
 CREATE INDEX CONCURRENTLY idx_customers_active_city_opt ON customers (city)
     WHERE is_active = true;
 
 -- Text search optimization
-CREATE INDEX CONCURRENTLY idx_products_fulltext_opt ON products 
+CREATE INDEX CONCURRENTLY idx_products_fulltext_opt ON products
     USING gin (to_tsvector('english', name || ' ' || COALESCE(description, '')));
 
 -- Update statistics after index creation
@@ -614,7 +617,7 @@ SELECT
 
 -- Detailed before/after comparison
 WITH performance_comparison AS (
-    SELECT 
+    SELECT
         test_name,
         MAX(CASE WHEN test_phase = 'BEFORE' THEN execution_time_ms END) as before_ms,
         MAX(CASE WHEN test_phase = 'AFTER' THEN execution_time_ms END) as after_ms,
@@ -646,7 +649,7 @@ SELECT
     END as "Final Status"
 FROM performance_comparison
 WHERE before_ms IS NOT NULL AND after_ms IS NOT NULL
-ORDER BY 
+ORDER BY
     CASE WHEN before_ms > 0 AND after_ms > 0 THEN before_ms / after_ms ELSE 0 END DESC;
 
 -- Cache performance comparison
@@ -654,11 +657,11 @@ SELECT
     '💾 CACHE PERFORMANCE COMPARISON' as metric_type,
     '─────────────────────────────────────────────────────────────────' as separator
 UNION ALL
-SELECT 
+SELECT
     'Cache Hit Ratio' as metric_type,
     'Before: ' || COALESCE(cache_before, 0) || '%  →  After: ' || COALESCE(cache_after, 0) || '%  (' ||
-    CASE 
-        WHEN cache_before > 0 AND cache_after > 0 THEN 
+    CASE
+        WHEN cache_before > 0 AND cache_after > 0 THEN
             '+' || ROUND(cache_after - cache_before, 1) || '% improvement)'
         ELSE 'N/A)'
     END as comparison
@@ -691,7 +694,7 @@ SELECT
     ROUND(avg_before / NULLIF(avg_after, 0), 1) || 'x faster overall)' as summary
 FROM summary_stats
 UNION ALL
-SELECT 
+SELECT
     'Worst Case Performance' as metric_type,
     ROUND(max_before, 1) || ' ms → ' || ROUND(max_after, 1) || ' ms (' ||
     ROUND(max_before / NULLIF(max_after, 0), 1) || 'x improvement)' as summary
@@ -701,7 +704,7 @@ FROM summary_stats;
 -- 11. INDEX USAGE ANALYSIS
 -- ========================================
 
-SELECT 
+SELECT
     '📊 INDEX USAGE ANALYSIS' as title,
     '═══════════════════════════════════════════════════════════════════' as separator;
 
