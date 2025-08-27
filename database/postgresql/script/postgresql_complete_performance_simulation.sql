@@ -445,8 +445,8 @@ SELECT
     END as performance_status,
     rows_examined as rows_examined
 FROM performance_baseline 
--- WHERE test_phase = 'BEFORE'
-WHERE test_phase = 'AFTER'
+WHERE test_phase = 'BEFORE'
+-- WHERE test_phase = 'AFTER'
     AND execution_time_ms IS NOT NULL
 ORDER BY execution_time_ms DESC;
 
