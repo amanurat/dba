@@ -9,28 +9,34 @@
 ### 1.1 Top Slow Queries (Total Duration)
 ```sql
 -- Top 10 Query ที่ใช้เวลารวมมากที่สุด
-SELECT TOP 10
-    qst.query_sql_text,
-    qsp.plan_id,
-    rs.count_executions,
-    ROUND(rs.total_duration / 1000.0, 2) AS total_duration_ms,
-    ROUND(rs.avg_duration / 1000.0, 2) AS avg_duration_ms,
-    ROUND(rs.max_duration / 1000.0, 2) AS max_duration_ms,
-    ROUND(rs.avg_cpu_time / 1000.0, 2) AS avg_cpu_time_ms,
-    rs.avg_logical_io_reads,
-    rs.avg_physical_io_reads,
-    rs.last_execution_time,
-    ROUND((rs.total_duration / 1000.0) / NULLIF(
-        (SELECT SUM(rsx.total_duration) FROM sys.query_store_runtime_stats rsx 
-         WHERE rsx.last_execution_time > DATEADD(hour, -24, GETUTCDATE())), 0
-    ) * 100, 2) AS percentage_of_total_time
-FROM sys.query_store_query_text qst
-    INNER JOIN sys.query_store_query q ON qst.query_text_id = q.query_text_id
-    INNER JOIN sys.query_store_plan qsp ON q.query_id = qsp.query_id
-    INNER JOIN sys.query_store_runtime_stats rs ON qsp.plan_id = rs.plan_id
-WHERE rs.last_execution_time > DATEADD(hour, -24, GETUTCDATE())
-    AND qst.query_sql_text NOT LIKE '%sys.%'
-ORDER BY rs.total_duration DESC;
+-- Top 10 Queries (Human-readable format) - Last 24 Hours
+WITH top_queries AS (
+    SELECT TOP 10
+        qst.query_sql_text,
+            q.query_id,
+           rs.count_executions,
+           rs.avg_duration / 1000.0 AS avg_duration_ms,
+           (rs.avg_duration * rs.count_executions) / 1000.0 AS total_duration_ms,
+           rs.avg_cpu_time / 1000.0 AS avg_cpu_time_ms
+    FROM sys.query_store_query_text qst
+             INNER JOIN sys.query_store_query q ON qst.query_text_id = q.query_text_id
+             INNER JOIN sys.query_store_plan qsp ON q.query_id = qsp.query_id
+             INNER JOIN sys.query_store_runtime_stats rs ON qsp.plan_id = rs.plan_id
+    WHERE rs.last_execution_time > DATEADD(hour, -24, GETUTCDATE())
+)
+SELECT
+    LEFT(REPLACE(REPLACE(query_sql_text, CHAR(10), ' '), CHAR(13), ' '), 120)
+        + '...' AS [Query Text Preview],
+    COUNT_EXECUTIONS AS [Executions],
+    CAST(avg_duration_ms AS DECIMAL(10,2)) AS [Avg Duration (ms)],
+    CAST(total_duration_ms AS DECIMAL(18,2)) AS [Total Duration (ms)],
+    CAST(avg_cpu_time_ms AS DECIMAL(10,2)) AS [Avg CPU Time (ms)],
+    CAST(100.0 * total_duration_ms / SUM(total_duration_ms) OVER() AS DECIMAL(5,2))
+        AS [% of Total Duration]
+
+FROM top_queries
+ORDER BY total_duration_ms DESC;
+
 ```
 
 ### 1.2 Slowest Queries Per Execution
@@ -151,76 +157,45 @@ ORDER BY improvement_measure DESC;
 ### 3.2 Unused Index Detection
 ```sql
 -- Index ที่ไม่ได้ใช้งาน (ควรพิจารณาลบ)
-SELECT 
-    OBJECT_SCHEMA_NAME(i.object_id) AS schema_name,
-    OBJECT_NAME(i.object_id) AS table_name,
-    i.name AS index_name,
-    i.type_desc AS index_type,
-    ISNULL(ius.user_seeks, 0) AS user_seeks,
-    ISNULL(ius.user_scans, 0) AS user_scans,
-    ISNULL(ius.user_lookups, 0) AS user_lookups,
-    ISNULL(ius.user_seeks + ius.user_scans + ius.user_lookups, 0) AS total_reads,
-    ISNULL(ius.user_updates, 0) AS user_updates,
-    CAST((8.0 * SUM(a.used_pages)) / 1024 AS decimal(15,2)) AS index_size_mb,
-    ius.last_user_seek,
-    ius.last_user_scan,
-    ius.last_user_lookup,
-    ius.last_user_update,
-    'DROP INDEX [' + i.name + '] ON [' + OBJECT_SCHEMA_NAME(i.object_id) + '].[' + OBJECT_NAME(i.object_id) + '];' AS drop_statement
-FROM sys.indexes i
-    INNER JOIN sys.partitions p ON i.object_id = p.object_id AND i.index_id = p.index_id
-    INNER JOIN sys.allocation_units a ON p.partition_id = a.container_id
-    LEFT JOIN sys.dm_db_index_usage_stats ius ON i.object_id = ius.object_id 
-        AND i.index_id = ius.index_id AND ius.database_id = DB_ID()
-WHERE OBJECTPROPERTY(i.object_id, 'IsUserTable') = 1
-    AND i.index_id > 0  -- ไม่รวม heap
-    AND i.is_primary_key = 0  -- ไม่รวม primary key
-    AND i.is_unique_constraint = 0  -- ไม่รวม unique constraint
-    AND (ius.user_seeks IS NULL OR ius.user_seeks = 0)
-    AND (ius.user_scans IS NULL OR ius.user_scans = 0)
-    AND (ius.user_lookups IS NULL OR ius.user_lookups = 0)
-GROUP BY i.object_id, i.index_id, i.name, i.type_desc, i.is_primary_key, i.is_unique_constraint,
-         ius.user_seeks, ius.user_scans, ius.user_lookups, ius.user_updates,
-         ius.last_user_seek, ius.last_user_scan, ius.last_user_lookup, ius.last_user_update
-HAVING CAST((8.0 * SUM(a.used_pages)) / 1024 AS decimal(15,2)) > 1  -- Index > 1MB
-ORDER BY index_size_mb DESC;
+
 ```
 
 ### 3.3 Index Usage Statistics
 ```sql
 -- สถิติการใช้งาน Index
-SELECT 
-    OBJECT_SCHEMA_NAME(ius.object_id) AS schema_name,
-    OBJECT_NAME(ius.object_id) AS table_name,
+SELECT
+    OBJECT_SCHEMA_NAME(i.object_id) AS schema_name,
+    OBJECT_NAME(i.object_id) AS table_name,
     i.name AS index_name,
     i.type_desc AS index_type,
-    ius.user_seeks + ius.user_scans + ius.user_lookups AS total_reads,
-    ius.user_seeks,
-    ius.user_scans,
-    ius.user_lookups,
-    ius.user_updates,
-    CASE 
-        WHEN (ius.user_seeks + ius.user_scans + ius.user_lookups) = 0 THEN 'Unused'
-        WHEN ius.user_updates > (ius.user_seeks + ius.user_scans + ius.user_lookups) * 2 THEN 'High Maintenance'
-        WHEN (ius.user_seeks + ius.user_scans + ius.user_lookups) > 1000 THEN 'High Usage'
-        ELSE 'Low Usage'
-    END AS usage_pattern,
-    CAST((8.0 * SUM(a.used_pages)) / 1024 AS decimal(15,2)) AS index_size_mb,
-    ius.last_user_seek,
-    ius.last_user_scan,
-    ius.last_user_lookup,
-    ius.last_user_update
+    SUM(ISNULL(ius.user_seeks, 0)) AS user_seeks,
+    SUM(ISNULL(ius.user_scans, 0)) AS user_scans,
+    SUM(ISNULL(ius.user_lookups, 0)) AS user_lookups,
+    SUM(ISNULL(ius.user_seeks, 0) + ISNULL(ius.user_scans, 0) + ISNULL(ius.user_lookups, 0)) AS total_reads,
+    SUM(ISNULL(ius.user_updates, 0)) AS user_updates,
+    CAST(SUM(ps.used_page_count) * 8.0 / 1024 AS decimal(15,2)) AS index_size_mb,
+    MAX(ius.last_user_seek) AS last_user_seek,
+    MAX(ius.last_user_scan) AS last_user_scan,
+    MAX(ius.last_user_lookup) AS last_user_lookup,
+    MAX(ius.last_user_update) AS last_user_update,
+    'DROP INDEX [' + i.name + '] ON [' + OBJECT_SCHEMA_NAME(i.object_id) + '].[' + OBJECT_NAME(i.object_id) + '];' AS drop_statement
 FROM sys.indexes i
-    INNER JOIN sys.partitions p ON i.object_id = p.object_id AND i.index_id = p.index_id
-    INNER JOIN sys.allocation_units a ON p.partition_id = a.container_id
-    LEFT JOIN sys.dm_db_index_usage_stats ius ON i.object_id = ius.object_id 
-        AND i.index_id = ius.index_id AND ius.database_id = DB_ID()
+         INNER JOIN sys.dm_db_partition_stats ps
+                    ON i.object_id = ps.object_id AND i.index_id = ps.index_id
+         LEFT JOIN sys.dm_db_index_usage_stats ius
+                   ON i.object_id = ius.object_id
+                       AND i.index_id = ius.index_id
+                       AND ius.database_id = DB_ID()
 WHERE OBJECTPROPERTY(i.object_id, 'IsUserTable') = 1
-    AND i.index_id > 0  -- ไม่รวม heap
-GROUP BY i.object_id, i.index_id, i.name, i.type_desc,
-         ius.user_seeks, ius.user_scans, ius.user_lookups, ius.user_updates,
-         ius.last_user_seek, ius.last_user_scan, ius.last_user_lookup, ius.last_user_update
-ORDER BY total_reads DESC;
+  AND i.index_id > 0                -- ไม่รวม heap
+  AND i.is_primary_key = 0          -- ไม่รวม primary key
+  AND i.is_unique_constraint = 0    -- ไม่รวม unique constraint
+GROUP BY i.object_id, i.index_id, i.name, i.type_desc
+HAVING CAST(SUM(ps.used_page_count) * 8.0 / 1024 AS decimal(15,2)) > 1   -- Index > 1MB
+   AND SUM(ISNULL(ius.user_seeks,0) + ISNULL(ius.user_scans,0) + ISNULL(ius.user_lookups,0)) = 0
+ORDER BY index_size_mb DESC;
+
+
 ```
 
 ---
@@ -448,13 +423,13 @@ WHERE type_desc = 'LOG';
 ### 7.1 Query Store Configuration Status
 ```sql
 -- สถานะการตั้งค่า Query Store
-SELECT 
+SELECT
     actual_state_desc AS current_state,
-    readonly_reason_desc AS readonly_reason,
+    readonly_reason AS readonly_reason_code,   -- ตัวเลข code
     desired_state_desc AS desired_state,
     current_storage_size_mb,
     max_storage_size_mb,
-    CAST(current_storage_size_mb * 100.0 / max_storage_size_mb AS decimal(5,2)) AS storage_usage_percent,
+    CAST(current_storage_size_mb * 100.0 / NULLIF(max_storage_size_mb,0) AS decimal(5,2)) AS storage_usage_percent,
     flush_interval_seconds,
     interval_length_minutes,
     stale_query_threshold_days,
@@ -463,6 +438,22 @@ SELECT
     max_plans_per_query,
     wait_stats_capture_mode_desc
 FROM sys.database_query_store_options;
+
+/*SELECT
+    readonly_reason,
+    CASE readonly_reason
+        WHEN 1 THEN 'Database is in read-only mode'
+        WHEN 2 THEN 'Database is in single-user mode'
+        WHEN 3 THEN 'Database is in emergency mode'
+        WHEN 4 THEN 'Database is secondary replica (read-only)'
+        WHEN 5 THEN 'Query Store internal error'
+        WHEN 6 THEN 'Database is in restoring state'
+        ELSE 'Other / Unknown'
+        END AS readonly_reason_desc
+FROM sys.database_query_store_options;*/
+
+
+
 ```
 
 ### 7.2 Query Store Statistics
@@ -616,44 +607,70 @@ ORDER BY used_space_mb DESC;
 ### 9.2 Column Statistics Health
 ```sql
 -- สถานะ Statistics ของ columns
-SELECT 
+;WITH stats_health AS (
+    SELECT
+        CASE
+            WHEN sp.last_updated < DATEADD(day, -7, GETDATE()) THEN 'Outdated'
+            WHEN sp.modification_counter > sp.rows * 0.2 THEN 'High Modifications'
+            WHEN sp.rows_sampled < sp.rows * 0.1 THEN 'Low Sample Rate'
+            ELSE 'Good'
+            END AS stats_health,
+        CAST(sp.rows_sampled * 100.0 / NULLIF(sp.rows, 0) AS decimal(5,2)) AS sample_percent
+    FROM sys.stats s
+             CROSS APPLY sys.dm_db_stats_properties(s.object_id, s.stats_id) sp
+    WHERE OBJECTPROPERTY(s.object_id, 'IsUserTable') = 1
+      AND sp.rows > 0
+)
+ SELECT
+     stats_health,
+     COUNT(*) AS total_stats,
+     CAST(100.0 * COUNT(*) / SUM(COUNT(*)) OVER() AS decimal(5,2)) AS percent_of_total,
+     CAST(AVG(sample_percent) AS decimal(5,2)) AS avg_sample_percent
+ FROM stats_health
+ GROUP BY stats_health
+ ORDER BY
+     CASE stats_health
+         WHEN 'Outdated' THEN 1
+         WHEN 'High Modifications' THEN 2
+         WHEN 'Low Sample Rate' THEN 3
+         ELSE 4
+         END;
+
+-- Sample Output (Statistics Health Report)
+-- stats_health       | total_stats | percent_of_total | avg_sample_percent
+-----------------+-------------+------------------+--------------------
+-- Outdated           | 5           | 12.50%           | 95.20
+-- High Modifications | 3           | 7.50%            | 98.70
+-- Low Sample Rate    | 2           | 5.00%            | 8.30
+-- Good               | 30          | 75.00%           | 100.00
+    
+-- สมมติใน database ของคุณมี 40 statistics ทั้งหมด
+-- 5 อัน → last updated เกิน 7 วัน → จัดเป็น Outdated
+-- 3 อัน → มี row modifications เกิน 20% → จัดเป็น High Modifications
+-- 2 อัน → sample น้อยกว่า 10% → จัดเป็น Low Sample Rate
+-- 30 อัน → ปกติ → จัดเป็น Good
+    
+    
+-- รายละเอียดทุก Statistics object
+SELECT
     OBJECT_SCHEMA_NAME(s.object_id) AS schema_name,
     OBJECT_NAME(s.object_id) AS table_name,
     s.name AS stats_name,
-    STUFF((
-        SELECT ', ' + c.name
-        FROM sys.stats_columns sc
-            INNER JOIN sys.columns c ON sc.object_id = c.object_id AND sc.column_id = c.column_id
-        WHERE sc.object_id = s.object_id AND sc.stats_id = s.stats_id
-        FOR XML PATH('')
-    ), 1, 2, '') AS stats_columns,
     sp.last_updated,
-    sp.rows AS table_rows,
+    sp.rows,
     sp.rows_sampled,
     CAST(sp.rows_sampled * 100.0 / NULLIF(sp.rows, 0) AS decimal(5,2)) AS sample_percent,
     sp.steps AS histogram_steps,
-    sp.modification_counter AS modifications_since_update,
-    CASE 
-        WHEN sp.last_updated < DATEADD(day, -7, GETDATE()) THEN 'Outdated'
-        WHEN sp.modification_counter > sp.rows * 0.2 THEN 'High Modifications'
-        WHEN sp.rows_sampled < sp.rows * 0.1 THEN 'Low Sample Rate'
-        ELSE 'Good'
-    END AS stats_health,
-    s.auto_created,
-    s.user_created,
-    s.no_recompute
+    sp.modification_counter
 FROM sys.stats s
-    CROSS APPLY sys.dm_db_stats_properties(s.object_id, s.stats_id) sp
+         CROSS APPLY sys.dm_db_stats_properties(s.object_id, s.stats_id) sp
 WHERE OBJECTPROPERTY(s.object_id, 'IsUserTable') = 1
-    AND sp.rows > 0
-ORDER BY 
-    CASE 
-        WHEN sp.last_updated < DATEADD(day, -7, GETDATE()) THEN 1
-        WHEN sp.modification_counter > sp.rows * 0.2 THEN 2
-        ELSE 3
-    END,
-    sp.modification_counter DESC;
-```
+  AND sp.rows > 0
+ORDER BY schema_name, table_name, stats_name;
+
+
+``` 
+
 
 ---
 

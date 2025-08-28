@@ -234,17 +234,17 @@ FROM sys.query_store_runtime_stats;
 -- Step 6: Top performing queries verification
 SELECT TOP 10
     qst.query_sql_text,
-    q.query_id,
-    rs.count_executions,
-    rs.avg_duration / 1000.0 AS avg_duration_ms,
-    rs.total_duration / 1000.0 AS total_duration_ms,
-    rs.avg_cpu_time / 1000.0 AS avg_cpu_time_ms
+        q.query_id,
+       rs.count_executions,
+       rs.avg_duration / 1000.0 AS avg_duration_ms,
+       (rs.avg_duration * rs.count_executions) / 1000.0 AS total_duration_ms,
+       rs.avg_cpu_time / 1000.0 AS avg_cpu_time_ms
 FROM sys.query_store_query_text qst
-    INNER JOIN sys.query_store_query q ON qst.query_text_id = q.query_text_id
-    INNER JOIN sys.query_store_plan qsp ON q.query_id = qsp.query_id
-    INNER JOIN sys.query_store_runtime_stats rs ON qsp.plan_id = rs.plan_id
+         INNER JOIN sys.query_store_query q ON qst.query_text_id = q.query_text_id
+         INNER JOIN sys.query_store_plan qsp ON q.query_id = qsp.query_id
+         INNER JOIN sys.query_store_runtime_stats rs ON qsp.plan_id = rs.plan_id
 WHERE rs.last_execution_time > DATEADD(hour, -24, GETUTCDATE())
-ORDER BY rs.total_duration DESC;
+ORDER BY total_duration_ms DESC;
 -- Expected: Comprehensive query statistics with performance metrics
 ```
 
@@ -252,40 +252,41 @@ ORDER BY rs.total_duration DESC;
 
 ```sql
 -- Database performance overview
-SELECT 
+SELECT
     'Query Store Storage Usage' as metric,
     CONCAT(
-        CAST(current_storage_size_mb AS varchar(10)), 
-        ' MB / ', 
-        CAST(max_storage_size_mb AS varchar(10)), 
-        ' MB (', 
-        CAST(ROUND(current_storage_size_mb * 100.0 / max_storage_size_mb, 1) AS varchar(10)),
-        '%)'
+            CAST(current_storage_size_mb AS varchar(50)),
+            ' MB / ',
+            CAST(max_storage_size_mb AS varchar(50)),
+            ' MB (',
+            CAST(ROUND(current_storage_size_mb * 100.0 / NULLIF(max_storage_size_mb,0), 1) AS varchar(50)),
+            '%)'
     ) as value
 FROM sys.database_query_store_options
 
 UNION ALL
 
-SELECT 
+SELECT
     'Total Unique Queries',
-    CAST(COUNT(*) AS varchar(20))
+    CAST(COUNT(*) AS varchar(50))
 FROM sys.query_store_query
 
 UNION ALL
 
-SELECT 
+SELECT
     'Queries Executed (Last 24h)',
-    CAST(SUM(rs.count_executions) AS varchar(20))
+    CAST(SUM(rs.count_executions) AS varchar(50))
 FROM sys.query_store_runtime_stats rs
 WHERE rs.last_execution_time > DATEADD(hour, -24, GETUTCDATE())
 
 UNION ALL
 
-SELECT 
+SELECT
     'Average Query Duration (ms)',
-    CAST(ROUND(AVG(rs.avg_duration / 1000.0), 2) AS varchar(20))
+    CAST(ROUND(AVG(rs.avg_duration / 1000.0), 2) AS varchar(50))
 FROM sys.query_store_runtime_stats rs
 WHERE rs.last_execution_time > DATEADD(hour, -24, GETUTCDATE());
+
 ```
 
 ---
