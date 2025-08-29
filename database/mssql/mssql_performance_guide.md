@@ -216,8 +216,12 @@ SELECT
 FROM sys.database_query_store_options;
 
 -- เปิด Query Store ถ้ายังไม่เปิด
-ALTER DATABASE CURRENT SET QUERY_STORE = ON 
-(
+ALTER DATABASE CURRENT
+    SET QUERY_STORE = ON;
+
+-- ตั้งค่า options ของ Query Store
+ALTER DATABASE CURRENT
+    SET QUERY_STORE (
     OPERATION_MODE = READ_WRITE,
     CLEANUP_POLICY = (STALE_QUERY_THRESHOLD_DAYS = 30),
     DATA_FLUSH_INTERVAL_SECONDS = 900,
@@ -225,7 +229,7 @@ ALTER DATABASE CURRENT SET QUERY_STORE = ON
     MAX_STORAGE_SIZE_MB = 1000,
     QUERY_CAPTURE_MODE = AUTO,
     SIZE_BASED_CLEANUP_MODE = AUTO
-);
+    );
 ```
 
 #### 2.2 หา Query ช้าอันดับ 1-5 (จาก Query Store)
@@ -233,17 +237,19 @@ ALTER DATABASE CURRENT SET QUERY_STORE = ON
 -- Top 5 Query ที่ใช้เวลานานสุด
 SELECT TOP 5
     qst.query_sql_text,
-    qsp.plan_id,
-    rs.count_executions,
-    rs.avg_duration / 1000.0 AS avg_duration_ms,
-    rs.max_duration / 1000.0 AS max_duration_ms,
-    rs.total_duration / 1000.0 AS total_duration_ms
+        qsp.plan_id,
+       rs.count_executions,
+       CAST(rs.avg_duration / 1000.0 AS decimal(18,2)) AS avg_duration_ms,
+       CAST(rs.max_duration / 1000.0 AS decimal(18,2)) AS max_duration_ms,
+       CAST((rs.avg_duration * rs.count_executions) / 1000.0 AS decimal(18,2)) AS total_duration_ms
 FROM sys.query_store_query_text qst
-    INNER JOIN sys.query_store_query q ON qst.query_text_id = q.query_text_id
-    INNER JOIN sys.query_store_plan qsp ON q.query_id = qsp.query_id
-    INNER JOIN sys.query_store_runtime_stats rs ON qsp.plan_id = rs.plan_id
+         INNER JOIN sys.query_store_query q ON qst.query_text_id = q.query_text_id
+         INNER JOIN sys.query_store_plan qsp ON q.query_id = qsp.query_id
+         INNER JOIN sys.query_store_runtime_stats rs ON qsp.plan_id = rs.plan_id
 WHERE rs.last_execution_time > DATEADD(hour, -24, GETUTCDATE())
-ORDER BY rs.total_duration DESC;
+ORDER BY total_duration_ms DESC;
+
+
 ```
 
 #### 2.3 หา Query ช้าจาก DMV (สำหรับทุก SQL Server)

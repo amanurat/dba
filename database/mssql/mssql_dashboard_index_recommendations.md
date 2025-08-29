@@ -50,33 +50,37 @@ ORDER BY improvement_measure DESC;
 -- Top 10 Query ช้าจาก Query Store
 SELECT TOP 10
     qst.query_sql_text,
-    qsp.plan_id,
-    rs.count_executions,
-    ROUND(rs.avg_duration / 1000.0, 2) AS avg_duration_ms,
-    ROUND(rs.max_duration / 1000.0, 2) AS max_duration_ms,
-    ROUND(rs.total_duration / 1000.0, 2) AS total_duration_ms,
-    ROUND(rs.avg_cpu_time / 1000.0, 2) AS avg_cpu_time_ms,
-    rs.avg_logical_io_reads,
-    rs.avg_physical_io_reads,
-    ROUND((rs.total_duration / 1000.0) / NULLIF(
-        (SELECT SUM(rsx.total_duration) FROM sys.query_store_runtime_stats rsx 
-         WHERE rsx.last_execution_time > DATEADD(hour, -24, GETUTCDATE())), 0
-    ) * 100, 2) AS percentage_of_total_time,
-    rs.last_execution_time,
-    CASE 
-        WHEN rs.avg_duration > 5000000 THEN '🔴 Critical'  -- > 5 seconds
-        WHEN rs.avg_duration > 1000000 THEN '🟠 High'     -- > 1 second  
-        WHEN rs.avg_duration > 200000 THEN '🟡 Medium'    -- > 200ms
-        ELSE '🟢 Low'
-    END AS priority_level
+        qsp.plan_id,
+       rs.count_executions,
+       ROUND(rs.avg_duration / 1000.0, 2) AS avg_duration_ms,
+       ROUND(rs.max_duration / 1000.0, 2) AS max_duration_ms,
+       ROUND((rs.avg_duration * rs.count_executions) / 1000.0, 2) AS total_duration_ms,
+       ROUND(rs.avg_cpu_time / 1000.0, 2) AS avg_cpu_time_ms,
+       rs.avg_logical_io_reads,
+       rs.avg_physical_io_reads,
+       ROUND(
+               ((rs.avg_duration * rs.count_executions) / NULLIF(
+                       (SELECT SUM(rsx.avg_duration * rsx.count_executions)
+                        FROM sys.query_store_runtime_stats rsx
+                        WHERE rsx.last_execution_time > DATEADD(hour, -24, GETUTCDATE())), 0)
+                   ) * 100, 2
+       ) AS percentage_of_total_time,
+       rs.last_execution_time,
+       CASE
+           WHEN rs.avg_duration > 5000000 THEN '🔴 Critical'  -- > 5 seconds
+           WHEN rs.avg_duration > 1000000 THEN '🟠 High'     -- > 1 second  
+           WHEN rs.avg_duration > 200000 THEN '🟡 Medium'    -- > 200ms
+           ELSE '🟢 Low'
+           END AS priority_level
 FROM sys.query_store_query_text qst
-    INNER JOIN sys.query_store_query q ON qst.query_text_id = q.query_text_id
-    INNER JOIN sys.query_store_plan qsp ON q.query_id = qsp.query_id
-    INNER JOIN sys.query_store_runtime_stats rs ON qsp.plan_id = rs.plan_id
+         INNER JOIN sys.query_store_query q ON qst.query_text_id = q.query_text_id
+         INNER JOIN sys.query_store_plan qsp ON q.query_id = qsp.query_id
+         INNER JOIN sys.query_store_runtime_stats rs ON qsp.plan_id = rs.plan_id
 WHERE rs.last_execution_time > DATEADD(hour, -24, GETUTCDATE())
-    AND qst.query_sql_text NOT LIKE '%sys.%'
-    AND qst.query_sql_text NOT LIKE '%INFORMATION_SCHEMA%'
+  AND qst.query_sql_text NOT LIKE '%sys.%'
+  AND qst.query_sql_text NOT LIKE '%INFORMATION_SCHEMA%'
 ORDER BY rs.avg_duration DESC;
+
 ```
 
 📌 ใช้แสดงเป็น Interactive Table พร้อม:
@@ -91,50 +95,72 @@ ORDER BY rs.avg_duration DESC;
 
 ```sql
 -- วิเคราะห์การใช้งาน Index
-SELECT 
-    OBJECT_SCHEMA_NAME(ius.object_id) AS schema_name,
-    OBJECT_NAME(ius.object_id) AS table_name,
-    i.name AS index_name,
-    i.type_desc AS index_type,
-    ius.user_seeks + ius.user_scans + ius.user_lookups AS total_reads,
-    ius.user_updates,
-    CASE 
-        WHEN (ius.user_seeks + ius.user_scans + ius.user_lookups) = 0 THEN '🔴 Unused'
-        WHEN (ius.user_seeks + ius.user_scans + ius.user_lookups) < 10 THEN '🟡 Low Usage'
-        WHEN ius.user_updates > (ius.user_seeks + ius.user_scans + ius.user_lookups) * 2 THEN '🟠 High Maintenance'
-        ELSE '🟢 Good'
-    END AS usage_status,
-    CAST((8.0 * SUM(a.used_pages)) / 1024 AS decimal(15,2)) AS index_size_mb,
-    ius.last_user_seek,
-    ius.last_user_scan,
-    ius.last_user_lookup,
-    ius.last_user_update,
-    CASE 
-        WHEN i.is_primary_key = 1 THEN 'Primary Key - Keep'
-        WHEN i.is_unique_constraint = 1 THEN 'Unique Constraint - Keep'
-        WHEN (ius.user_seeks + ius.user_scans + ius.user_lookups) = 0 
-             AND ius.last_user_update > DATEADD(day, -30, GETDATE()) THEN 'Consider Dropping'
-        WHEN ius.user_updates > (ius.user_seeks + ius.user_scans + ius.user_lookups) * 5 THEN 'Review Necessity'
-        ELSE 'Keep'
-    END AS recommendation
-FROM sys.indexes i
-    INNER JOIN sys.partitions p ON i.object_id = p.object_id AND i.index_id = p.index_id
-    INNER JOIN sys.allocation_units a ON p.partition_id = a.container_id
-    LEFT JOIN sys.dm_db_index_usage_stats ius ON i.object_id = ius.object_id 
-        AND i.index_id = ius.index_id AND ius.database_id = DB_ID()
-WHERE OBJECTPROPERTY(i.object_id, 'IsUserTable') = 1
-    AND i.index_id > 0  -- ไม่รวม heap
-GROUP BY i.object_id, i.index_id, i.name, i.type_desc, i.is_primary_key, i.is_unique_constraint,
-         ius.user_seeks, ius.user_scans, ius.user_lookups, ius.user_updates,
-         ius.last_user_seek, ius.last_user_scan, ius.last_user_lookup, ius.last_user_update
-ORDER BY 
-    CASE usage_status 
-        WHEN '🔴 Unused' THEN 1
-        WHEN '🟠 High Maintenance' THEN 2
-        WHEN '🟡 Low Usage' THEN 3
-        ELSE 4
-    END,
-    index_size_mb DESC;
+;WITH idx AS (
+    SELECT
+        i.object_id,
+        i.index_id,
+        OBJECT_SCHEMA_NAME(i.object_id) AS schema_name,
+        OBJECT_NAME(i.object_id) AS table_name,
+        i.name AS index_name,
+        i.type_desc AS index_type,
+        i.is_primary_key,
+        i.is_unique_constraint,
+        SUM(ps.used_page_count) * 8.0 / 1024 AS index_size_mb,
+        SUM(ISNULL(ius.user_seeks,0)) AS user_seeks,
+        SUM(ISNULL(ius.user_scans,0)) AS user_scans,
+        SUM(ISNULL(ius.user_lookups,0)) AS user_lookups,
+        SUM(ISNULL(ius.user_updates,0)) AS user_updates,
+        MAX(ius.last_user_seek) AS last_user_seek,
+        MAX(ius.last_user_scan) AS last_user_scan,
+        MAX(ius.last_user_lookup) AS last_user_lookup,
+        MAX(ius.last_user_update) AS last_user_update
+    FROM sys.indexes i
+             INNER JOIN sys.dm_db_partition_stats ps
+                        ON i.object_id = ps.object_id AND i.index_id = ps.index_id
+             LEFT JOIN sys.dm_db_index_usage_stats ius
+                       ON i.object_id = ius.object_id
+                           AND i.index_id = ius.index_id
+                           AND ius.database_id = DB_ID()
+    WHERE OBJECTPROPERTY(i.object_id, 'IsUserTable') = 1
+      AND i.index_id > 0  -- exclude heap
+    GROUP BY i.object_id, i.index_id, i.name, i.type_desc, i.is_primary_key, i.is_unique_constraint
+)
+ SELECT
+     schema_name,
+     table_name,
+     index_name,
+     index_type,
+     (user_seeks + user_scans + user_lookups) AS total_reads,
+     user_updates,
+     CASE
+         WHEN (user_seeks + user_scans + user_lookups) = 0 THEN '🔴 Unused'
+         WHEN (user_seeks + user_scans + user_lookups) < 10 THEN '🟡 Low Usage'
+         WHEN user_updates > (user_seeks + user_scans + user_lookups) * 2 THEN '🟠 High Maintenance'
+         ELSE '🟢 Good'
+         END AS usage_status,
+     CAST(index_size_mb AS decimal(15,2)) AS index_size_mb,
+     last_user_seek,
+     last_user_scan,
+     last_user_lookup,
+     last_user_update,
+     CASE
+         WHEN is_primary_key = 1 THEN 'Primary Key - Keep'
+         WHEN is_unique_constraint = 1 THEN 'Unique Constraint - Keep'
+         WHEN (user_seeks + user_scans + user_lookups) = 0
+             AND last_user_update > DATEADD(day, -30, GETDATE()) THEN 'Consider Dropping'
+         WHEN user_updates > (user_seeks + user_scans + user_lookups) * 5 THEN 'Review Necessity'
+         ELSE 'Keep'
+         END AS recommendation
+ FROM idx
+ ORDER BY
+     CASE
+         WHEN (user_seeks + user_scans + user_lookups) = 0 THEN 1  -- Unused
+         WHEN user_updates > (user_seeks + user_scans + user_lookups) * 2 THEN 2 -- High Maintenance
+         WHEN (user_seeks + user_scans + user_lookups) < 10 THEN 3 -- Low Usage
+         ELSE 4 -- Good
+         END,
+     index_size_mb DESC;
+
 ```
 
 📌 แสดงเป็น Sortable Grid พร้อม:
@@ -302,6 +328,8 @@ WHERE waiting_tasks_count > 0
         'CHECKPOINT_QUEUE', 'REQUEST_FOR_DEADLOCK_SEARCH', 'XE_TIMER_EVENT'
     )
 ORDER BY wait_time_ms DESC;
+
+
 ```
 
 ---
